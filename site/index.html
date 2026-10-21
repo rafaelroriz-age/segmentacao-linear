@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGP Segmentação Homogênea</title>
+<meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → 200 m) e análise de sensibilidade da penalidade.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e8890c'/%3E%3Cpath d='M6 24 L13 9 L19 19 L26 7' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="css/estilo.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-cartesian-dist-min@2.35.2/plotly-cartesian.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<header class="topo">
+  <div class="marca">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <strong>SGP · Segmentação Homogênea</strong>
+      <small>Malha rodoviária — SRE até 200 m</small>
+    </div>
+  </div>
+  <nav class="abas-topo" role="tablist">
+    <button class="aba-topo ativa" data-pagina="painel" role="tab">Painel da malha</button>
+    <button class="aba-topo" data-pagina="rede" role="tab">Sensibilidade da rede</button>
+    <button class="aba-topo" data-pagina="metodo" role="tab">Metodologia</button>
+  </nav>
+  <div class="usuario">
+    <span id="usuario-email"></span>
+    <button id="btn-sair" class="btn-link" hidden>Sair</button>
+  </div>
+</header>
+
+<div id="aviso-local" class="aviso" hidden>Modo local: dados lidos de <code>site/dados-local/</code>, sem Supabase.</div>
+
+<!-- ── Login ─────────────────────────────────────────────────────────────── -->
+<section id="tela-login" class="tela-login" hidden>
+  <form id="form-login" class="cartao login">
+    <h1>Acesso restrito</h1>
+    <p>Entre com o usuário cadastrado no SGP. O acesso aos dados é liberado apenas para e-mails autorizados.</p>
+    <label>E-mail <input type="email" id="login-email" autocomplete="username" required></label>
+    <label>Senha <input type="password" id="login-senha" autocomplete="current-password" required></label>
+    <button type="submit" class="btn">Entrar</button>
+    <p id="login-erro" class="erro" role="alert"></p>
+  </form>
+</section>
+
+<main id="app" hidden>
+  <!-- ── Painel ──────────────────────────────────────────────────────────── -->
+  <section class="pagina ativa" id="pagina-painel">
+    <div class="grade-painel">
+      <div class="coluna-esq">
+        <article class="cartao">
+          <h2>Parâmetros dos pavimentos</h2>
+          <p class="sub">Extensão da malha por classe (intervalos de 200 m)</p>
+          <div id="graf-parametros" class="graf graf-parametros"></div>
+          <div id="legenda-classes" class="legenda"></div>
+        </article>
+        <article class="cartao">
+          <div class="cab-cartao">
+            <h2>Parâmetros por regional</h2>
+            <div class="chips" id="chips-regional">
+              <button class="chip ativo" data-param="iri">IRI</button>
+              <button class="chip" data-param="d0">DEF</button>
+              <button class="chip" data-param="igg">IGG</button>
+            </div>
+          </div>
+          <div class="rolagem"><div id="graf-regional" class="graf"></div></div>
+        </article>
+      </div>
+
+      <article class="cartao cartao-mapa">
+        <div class="cab-cartao">
+          <div>
+            <h2>Mapa da malha</h2>
+            <p class="sub" id="mapa-sub">Rodovias cadastradas</p>
+          </div>
+          <div class="ferramentas-mapa">
+            <label class="campo-busca">
+              <span class="vh">Buscar SRE</span>
+              <input id="busca-sre" list="lista-sres" placeholder="Buscar SRE (ex.: 320EGO0130)" autocomplete="off">
+              <datalist id="lista-sres"></datalist>
+            </label>
+            <label class="vh" for="modo-mapa">Colorir por</label>
+            <select id="modo-mapa">
+              <option value="sre">Segmentação S.R.E</option>
+              <option value="iri">IRI</option>
+              <option value="igg">IGG</option>
+              <option value="d0">Deflexão (d0)</option>
+            </select>
+          </div>
+        </div>
+        <div id="mapa" class="mapa"></div>
+        <div id="legenda-mapa" class="legenda legenda-mapa"></div>
+      </article>
+    </div>
+
+    <!-- ── Detalhe do SRE ──────────────────────────────────────────────── -->
+    <section id="detalhe" class="detalhe" hidden>
+      <div class="cartao">
+        <div class="cab-detalhe">
+          <div>
+            <p class="sobretitulo" id="det-rodovia"></p>
+            <h2 id="det-titulo"></h2>
+            <p class="sub" id="det-trecho"></p>
+          </div>
+          <button class="btn-fechar" id="det-fechar" aria-label="Fechar detalhe">×</button>
+        </div>
+        <div class="kpis" id="det-kpis"></div>
+        <nav class="abas" role="tablist">
+          <button class="aba ativa" data-aba="modelo" role="tab">Modelo atual</button>
+          <button class="aba" data-aba="sens" role="tab">Análise de sensibilidade</button>
+          <button class="aba" data-aba="tabelas" role="tab">Planilha de saída</button>
+        </nav>
+
+        <div class="painel-aba ativo" id="aba-modelo">
+          <p class="nota" id="nota-modelo"></p>
+          <div id="graf-perfil" class="graf graf-perfil"></div>
+          <div class="duas-colunas">
+            <div><h3>Diagnóstico CROPS</h3><p class="sub">Nº de quebras ótimo em função de β (Biswas &amp; Kuna, Fig. 9)</p><div id="graf-crops" class="graf graf-medio"></div></div>
+            <div><h3>Q-Q dos resíduos padronizados</h3><p class="sub" id="sub-qq"></p><div id="graf-qq" class="graf graf-medio"></div></div>
+          </div>
+          <h3>Auditoria dos resíduos estruturais</h3>
+          <div id="tab-auditoria" class="tabela-rolagem"></div>
+        </div>
+
+        <div class="painel-aba" id="aba-sens">
+          <p class="nota" id="nota-sens"></p>
+          <div class="cab-cartao">
+            <h3>Cenário</h3>
+            <div class="chips" id="chips-fator"></div>
+          </div>
+          <div id="kpis-fator" class="kpis kpis-compactos"></div>
+          <div id="graf-perfil-fator" class="graf graf-perfil"></div>
+          <h3>Posição das quebras em cada cenário</h3>
+          <p class="sub">Cada linha é um fator sobre β; a referência (1x) está em destaque.</p>
+          <div id="graf-faixas" class="graf graf-faixas"></div>
+          <div class="duas-colunas">
+            <div><h3>β testados no caminho CROPS</h3><p class="sub" id="sub-crops-sens"></p><div id="graf-crops-sens" class="graf graf-medio"></div></div>
+            <div><h3>Segmentos por cenário</h3><p class="sub">Número de segmentos de cada tipo em função do fator</p><div id="graf-nseg" class="graf graf-medio"></div></div>
+          </div>
+          <h3>Concordância com a referência</h3>
+          <p class="sub" id="sub-f1"></p>
+          <div id="graf-f1" class="graf graf-medio"></div>
+        </div>
+
+        <div class="painel-aba" id="aba-tabelas">
+          <div class="cab-cartao">
+            <div class="chips" id="chips-tipo">
+              <button class="chip ativo" data-tipo="combinada">Combinada</button>
+              <button class="chip" data-tipo="estrutural">Estrutural</button>
+              <button class="chip" data-tipo="funcional">Funcional</button>
+            </div>
+            <div class="ferramentas-tabela">
+              <label>Cenário <select id="sel-fator-tabela"></select></label>
+              <button class="btn btn-sec" id="btn-csv">Baixar CSV</button>
+            </div>
+          </div>
+          <div id="tab-segmentos" class="tabela-rolagem"></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ── Sensibilidade da rede ───────────────────────────────────────────── -->
+  <section class="pagina" id="pagina-rede">
+    <article class="cartao">
+      <h2>Sensibilidade da segmentação à penalidade <span class="sem-caixa">β</span></h2>
+      <p class="sub" id="rede-sub"></p>
+      <div class="kpis" id="rede-kpis"></div>
+    </article>
+    <div class="grade-2">
+      <article class="cartao"><h3>Penalidades testadas sobre o diagnóstico da rede</h3><p class="sub">Total de quebras estruturais na malha (CROPS) × β</p><div id="graf-rede-diag" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Densidade de quebras</h3><p class="sub">Quebras por km da malha, por tipo de segmentação</p><div id="graf-rede-densidade" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Comprimento dos segmentos estruturais</h3><p class="sub">Mediana e faixa p10–p90 (km)</p><div id="graf-rede-comp" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Homogeneidade interna</h3><p class="sub">CV de d0 ponderado pelo comprimento</p><div id="graf-rede-cv" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Concordância com a referência</h3><p class="sub">F1 das quebras (tolerância em km) por tipo</p><div id="graf-rede-f1" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Premissas dos resíduos estruturais</h3><p class="sub">% dos SREs auditados que passam em cada teste</p><div id="graf-rede-aud" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Calibração funcional — quebras por km</h3><p class="sub">α_km (IGG, PELT l2) × quebras por km na amostra de calibração</p><div id="graf-calib-nq" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Calibração funcional — soma do BIC</h3><p class="sub">Mínimo do BIC define o α_km usado</p><div id="graf-calib-bic" class="graf graf-medio"></div></article>
+    </div>
+    <article class="cartao">
+      <h3>Tabela da sensibilidade da rede</h3>
+      <div id="tab-rede" class="tabela-rolagem"></div>
+    </article>
+    <article class="cartao">
+      <h3>Parâmetros do modelo</h3>
+      <div id="tab-parametros" class="tabela-rolagem"></div>
+    </article>
+  </section>
+
+  <!-- ── Metodologia ─────────────────────────────────────────────────────── -->
+  <section class="pagina" id="pagina-metodo">
+    <article class="cartao texto">
+      <h2>Metodologia</h2>
+      <p>Cada SRE (Seção Rodoviária de Estudo) é dividido em intervalos de ~200 m com d0 (deflexão FWD), IGG e IRI. A segmentação homogênea agrupa intervalos contíguos de comportamento semelhante, com três leituras:</p>
+      <ul>
+        <li><strong>Funcional</strong> — PELT com custo <code>l2</code> sobre o IGG padronizado. A penalidade é proporcional à extensão (<code>α_km × km</code>), calibrada pelo mínimo da soma do BIC numa amostra estratificada de SREs, com banda de ±50% escolhida por BIC em cada SRE. Seções vizinhas sem diferença de média (Welch) são fundidas.</li>
+        <li><strong>Estrutural</strong> — PELT com custo <code>normal</code> (média e variância próprias por segmento) sobre o d0 bruto, como em Biswas &amp; Kuna (2022). O caminho CROPS dá todas as segmentações ótimas em função de β; o β da rede é o cotovelo da curva “quebras na malha × β”.</li>
+        <li><strong>Combinada</strong> — em duas etapas: as bases funcionais são subsegmentadas pelo PELT <code>normal</code> com o mesmo β; quebras funcionais a menos de 0,4 km de uma estrutural são absorvidas, segmentos menores que 0,6 km são evitados e vizinhos sem diferença em d0 (média e variância) nem em IGG são fundidos.</li>
+      </ul>
+      <p>A <strong>análise de sensibilidade</strong> repete toda a segmentação com β multiplicado por fatores (0,25x a 3x). O fator 1x é o modelo atual. Para cada SRE o site mostra as quebras de cada cenário, o número de segmentos, a concordância (F1) com a referência e a faixa de β em que a segmentação estrutural da referência continua ótima no caminho CROPS.</p>
+      <p>As classes de condição usam IGG (DNIT 006/2003-PRO) e IRI (DNIT/IPR-745). As faixas de d0 são provisórias e podem ser trocadas na tabela <code>classe_limite</code>.</p>
+      <h3>Segurança dos dados</h3>
+      <p>Os dados ficam no Postgres do Supabase com Row Level Security em todas as tabelas: só leitura, só para usuários autenticados, com e-mail confirmado e presentes na lista de autorizados. Nenhuma escrita é possível pela API, e cada consulta fica registrada.</p>
+      <p class="sub" id="metodo-meta"></p>
+    </article>
+  </section>
+</main>
+
+<div id="carregando" class="carregando" hidden><span class="spinner"></span><span id="carregando-txt">Carregando…</span></div>
+<div id="dica" class="dica" role="tooltip" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

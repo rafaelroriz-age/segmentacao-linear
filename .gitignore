@@ -1,0 +1,35 @@
+# Lista de permissao: a pasta tem planilhas, PDFs, ZIPs e graficos com dados do cliente.
+# So entra no git o que estiver liberado abaixo. Dados vao para o Supabase, nunca para o repositorio.
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/AGENTS.md
+!/DOCUMENTACAO_CODEBASE.md
+!/README-MCP.md
+!/requirements.txt
+!/documentacao-ia/
+!/pipeline/
+!/site/
+!/supabase/
+!/tools/
+!/segmentacao_rede_v8.ipynb
+!/segmentacao_rede_v8_sensibilidade.ipynb
+!/montar_dataset_analitica.py
+!/segmentacao_homogenea_sgp_v2.py
+!/malha_utils.py
+!/mcp_server.py
+!/app.py
+!/app_artigo.py
+!/.github/
+/.github/*
+!/.github/workflows/
+!/.github/copilot-instructions.md
+
+# dados gerados (supabase/exportar_dados.py)
+/site/dados-local/
+/supabase/dados/
+__pycache__/
+*.pyc
+.env
+.env.*

@@ -1,0 +1,15 @@
+streamlit>=1.28
+pandas>=1.5
+numpy>=1.23
+scipy>=1.10
+scikit-learn>=1.2
+matplotlib>=3.6
+seaborn>=0.12
+plotly>=5.13
+hdbscan>=0.8.33
+minisom>=2.3
+ruptures>=1.1
+umap-learn>=0.5
+xgboost>=1.7
+openpyxl>=3.0
+tabulate>=0.9

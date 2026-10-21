@@ -1,0 +1,4 @@
+# notebooks entram sem saidas (graficos e tabelas com dados): ver tools/nbstrip.py
+*.ipynb filter=nbstrip
+* text=auto
+*.png binary
