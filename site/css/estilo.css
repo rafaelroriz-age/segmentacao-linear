@@ -88,8 +88,6 @@ code { background: var(--superficie-2); padding: 1px 4px; border-radius: 4px; fo
 .aba-topo { background: none; border: 0; padding: 8px 12px; border-radius: 8px; color: var(--texto-2); font: inherit; font-weight: 600; cursor: pointer; }
 .aba-topo:hover { background: var(--superficie-2); }
 .aba-topo.ativa { color: var(--destaque-texto); background: var(--destaque-suave); }
-.usuario { display: flex; gap: 10px; align-items: center; color: var(--texto-2); font-size: 13px; }
-.btn-link { background: none; border: 0; color: var(--destaque-texto); font: inherit; font-weight: 600; cursor: pointer; }
 .aviso { background: var(--destaque-suave); color: var(--destaque-texto); padding: 6px 24px; font-size: 13px; }
 
 /* ── layout ── */
@@ -168,12 +166,7 @@ tr.ref td { background: var(--destaque-suave); }
 .ok { color: #0a7a0a; }
 .falha { color: var(--erro); }
 
-/* ── login, carregando, dica ── */
-.tela-login { min-height: calc(100vh - 60px); display: grid; place-items: center; padding: 16px; }
-.login { width: min(400px, 100%); display: flex; flex-direction: column; gap: 12px; }
-.login h1 { font-size: 22px; }
-.login p { color: var(--texto-2); margin: 0; }
-.login label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
+/* ── carregando, dica ── */
 .erro { color: var(--erro); min-height: 1em; }
 .carregando { position: fixed; inset: auto 20px 20px auto; background: var(--superficie); border: 1px solid var(--borda); box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 10px; padding: 10px 16px; display: flex; gap: 10px; align-items: center; z-index: 2000; }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--grade); border-top-color: var(--destaque); border-radius: 50%; animation: gira .8s linear infinite; }

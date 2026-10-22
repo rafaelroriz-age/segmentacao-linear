@@ -1,4 +1,4 @@
-// Fonte de dados: Supabase (funções dados_rede / dados_sre, protegidas por RLS) ou arquivos locais
+// Fonte de dados: Supabase (funções dados_rede / dados_sre, leitura pública) ou arquivos locais
 // com o mesmo formato.
 import { CONFIG } from './config.js';
 
@@ -10,30 +10,14 @@ export const modoLocal = local;
 export function iniciarCliente() {
   if (local || cliente) return cliente;
   cliente = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   return cliente;
-}
-
-export async function sessaoAtual() {
-  if (local) return { user: { email: 'modo local' } };
-  const { data } = await iniciarCliente().auth.getSession();
-  return data.session;
-}
-
-export async function entrar(email, senha) {
-  const { error } = await iniciarCliente().auth.signInWithPassword({ email, password: senha });
-  if (error) throw new Error(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
-}
-
-export async function sair() {
-  if (!local) await iniciarCliente().auth.signOut();
 }
 
 async function rpc(nome, args) {
   const { data, error } = await iniciarCliente().rpc(nome, args);
   if (error) {
-    if (error.code === '42501') throw new Error('Seu usuário não está autorizado a ver estes dados. Peça a liberação ao administrador.');
     throw new Error(error.message);
   }
   return data;

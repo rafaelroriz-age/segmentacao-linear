@@ -1,4 +1,4 @@
-import { modoLocal, sessaoAtual, entrar, sair, iniciarCliente, carregarRede, carregarSre } from './dados.js';
+import { modoLocal, carregarRede, carregarSre } from './dados.js';
 import { Mapa } from './mapa.js';
 import * as G from './graficos.js';
 import { num, km, fatorTxt, esc, TIPOS, residuosPadronizados, baixarCsv } from './util.js';
@@ -18,36 +18,11 @@ function erro(msg) {
 }
 
 async function iniciar() {
-  if (modoLocal) {
-    $('aviso-local').hidden = false;
-    return abrirApp({ user: { email: 'modo local' } });
-  }
-  const cli = iniciarCliente();
-  cli.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') location.reload(); });
-  const sessao = await sessaoAtual();
-  if (sessao) abrirApp(sessao); else mostrarLogin();
+  if (modoLocal) $('aviso-local').hidden = false;
+  await abrirApp();
 }
 
-function mostrarLogin() {
-  $('tela-login').hidden = false;
-  $('form-login').onsubmit = async (e) => {
-    e.preventDefault();
-    $('login-erro').textContent = '';
-    try {
-      await entrar($('login-email').value.trim(), $('login-senha').value);
-      $('tela-login').hidden = true;
-      abrirApp(await sessaoAtual());
-    } catch (err) {
-      $('login-erro').textContent = err.message;
-    }
-  };
-}
-
-async function abrirApp(sessao) {
-  $('usuario-email').textContent = sessao.user.email;
-  $('btn-sair').hidden = modoLocal;
-  $('btn-sair').onclick = () => sair();
-  $('app').hidden = false;
+async function abrirApp() {
   carregando('Carregando a malha…');
   try {
     estado.rede = await carregarRede();

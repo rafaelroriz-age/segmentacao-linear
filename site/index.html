@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SGP Segmentação Homogênea</title>
+<title>Segmentação Homogênea</title>
 <meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → 200 m) e análise de sensibilidade da penalidade.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e8890c'/%3E%3Cpath d='M6 24 L13 9 L19 19 L26 7' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -18,7 +18,7 @@
   <div class="marca">
     <span class="logo" aria-hidden="true"></span>
     <div>
-      <strong>SGP · Segmentação Homogênea</strong>
+      <strong>Segmentação Homogênea</strong>
       <small>Malha rodoviária — SRE até 200 m</small>
     </div>
   </div>
@@ -27,27 +27,11 @@
     <button class="aba-topo" data-pagina="rede" role="tab">Sensibilidade da rede</button>
     <button class="aba-topo" data-pagina="metodo" role="tab">Metodologia</button>
   </nav>
-  <div class="usuario">
-    <span id="usuario-email"></span>
-    <button id="btn-sair" class="btn-link" hidden>Sair</button>
-  </div>
 </header>
 
 <div id="aviso-local" class="aviso" hidden>Modo local: dados lidos de <code>site/dados-local/</code>, sem Supabase.</div>
 
-<!-- ── Login ─────────────────────────────────────────────────────────────── -->
-<section id="tela-login" class="tela-login" hidden>
-  <form id="form-login" class="cartao login">
-    <h1>Acesso restrito</h1>
-    <p>Entre com o usuário cadastrado no SGP. O acesso aos dados é liberado apenas para e-mails autorizados.</p>
-    <label>E-mail <input type="email" id="login-email" autocomplete="username" required></label>
-    <label>Senha <input type="password" id="login-senha" autocomplete="current-password" required></label>
-    <button type="submit" class="btn">Entrar</button>
-    <p id="login-erro" class="erro" role="alert"></p>
-  </form>
-</section>
-
-<main id="app" hidden>
+<main id="app">
   <!-- ── Painel ──────────────────────────────────────────────────────────── -->
   <section class="pagina ativa" id="pagina-painel">
     <div class="grade-painel">
@@ -204,7 +188,7 @@
       <p>A <strong>análise de sensibilidade</strong> repete toda a segmentação com β multiplicado por fatores (0,25x a 3x). O fator 1x é o modelo atual. Para cada SRE o site mostra as quebras de cada cenário, o número de segmentos, a concordância (F1) com a referência e a faixa de β em que a segmentação estrutural da referência continua ótima no caminho CROPS.</p>
       <p>As classes de condição usam IGG (DNIT 006/2003-PRO) e IRI (DNIT/IPR-745). As faixas de d0 são provisórias e podem ser trocadas na tabela <code>classe_limite</code>.</p>
       <h3>Segurança dos dados</h3>
-      <p>Os dados ficam no Postgres do Supabase com Row Level Security em todas as tabelas: só leitura, só para usuários autenticados, com e-mail confirmado e presentes na lista de autorizados. Nenhuma escrita é possível pela API, e cada consulta fica registrada.</p>
+      <p>Os dados ficam no Postgres do Supabase e são públicos para leitura. O acesso é controlado no banco: Row Level Security em todas as tabelas, sem permissão direta de leitura ou escrita nas tabelas, e duas funções somente leitura como única porta de entrada. Nenhuma escrita é possível pela API.</p>
       <p class="sub" id="metodo-meta"></p>
     </article>
   </section>
