@@ -4,9 +4,7 @@
 --    com search_path vazio e validam o parametro.
 --  * Nenhuma escrita pela API; a carga usa a conexao direta do Postgres (supabase/carregar_dados.py).
 
-drop function if exists public.acesso_permitido() cascade;
-drop function if exists acesso.registrar_acesso(text);
-drop schema if exists acesso cascade;
+-- O esquema acesso e a funcao acesso_permitido() ficam no banco, sem uso, para reativar o login depois.
 
 do $$
 declare
