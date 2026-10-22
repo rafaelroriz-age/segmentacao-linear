@@ -3,7 +3,6 @@
 // mesmo algoritmo do notebook; serve tanto para SREs da malha quanto para datasets enviados.
 import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
-import { grafCrops } from './graficos.js';
 import { num, esc, baixarCsv, TIPOS } from './util.js';
 
 const AJUDA = {
@@ -48,18 +47,16 @@ export class Sensibilidade {
       <div class="kpis kpis-compactos" data-r="kpis"></div>
       <div class="graf" data-r="graf-passo"></div>
       <div class="explicacao" data-r="explicacao"></div>
-      <details class="detalhes" data-r="det-fusoes"><summary>Fusões e escolha da penalidade funcional neste passo</summary><div data-r="fusoes"></div><div class="graf graf-baixo" data-r="graf-bic"></div></details>
-      <div class="duas-colunas">
-        <div><h3>Segmentos × penalidade</h3><p class="sub">Clique num ponto para abrir o passo. Linha pontilhada laranja: referência (modelo atual).</p><div class="graf graf-medio" data-r="graf-nseg"></div></div>
-        <div><h3>Caminho CROPS e penalidades testadas</h3><p class="sub">Nº de quebras estruturais ótimo para cada penalidade; linhas verticais: passos da grade.</p><div class="graf graf-medio" data-r="graf-crops"></div></div>
-      </div>
-      <h3>Posição das quebras em cada passo</h3>
-      <p class="sub">Penalidade crescente de baixo para cima; entre parênteses, o nº de segmentos. Clique numa quebra para abrir o passo.</p>
-      <div class="graf" data-r="graf-faixas"></div>
-      <div class="cab-cartao"><div><h3>Todos os passos</h3><p class="sub">Um gráfico por penalidade (linha laranja: quebras da combinada; verde: quebra nova; cinza: removida). Clique para abrir.</p></div></div>
+      <div class="cab-cartao"><div><h3>Um gráfico por penalidade</h3><p class="sub">Linha azul: média de d0 em cada segmento estrutural; linhas laranja: fronteiras da combinada; verde: quebra nova; cinza: removida. Clique para abrir.</p></div></div>
       <div class="grade-mini" data-r="minis"></div>
-      <div class="cab-cartao"><h3>Tabela dos passos</h3><button class="btn btn-sec" type="button" data-r="csv">Baixar CSV</button></div>
-      <div class="tabela-rolagem" data-r="tabela"></div>`;
+      <div class="duas-colunas">
+        <div><h3>Segmentos × penalidade</h3><p class="sub">Clique num ponto para abrir o passo. Pontilhado laranja: modelo atual.</p><div class="graf graf-medio" data-r="graf-nseg"></div></div>
+        <div><h3>Onde ficam as quebras</h3><p class="sub">Uma linha por penalidade (crescente para cima).</p><div class="graf" data-r="graf-faixas"></div></div>
+      </div>
+      <details class="detalhes" data-r="det-fusoes"><summary>Detalhes técnicos deste passo (fusões, BIC, resíduos)</summary><div data-r="fusoes"></div><div class="graf graf-baixo" data-r="graf-bic"></div></details>
+      <details class="detalhes"><summary>Tabela de todos os passos</summary>
+        <div class="cab-cartao"><span></span><button class="btn btn-sec" type="button" data-r="csv">Baixar CSV</button></div>
+        <div class="tabela-rolagem" data-r="tabela"></div></details>`;
     this.$('[data-r="alvo"]').addEventListener('click', (e) => {
       const b = e.target.closest('.chip');
       if (!b) return;
@@ -169,13 +166,12 @@ export class Sensibilidade {
     const pTxt = this.alvo === 'estrutural' ? num(s.penalidade, 3) : `α_km ${num(s.penalidade, 4)}`;
     this.$('[data-r="rot-passo"]').innerHTML = `Passo <strong>${i + 1}</strong> de ${this.passos.length} · penalidade ${pTxt} · ${num(s.fator, 2)}x da referência${i === this.iRef ? ' · <strong>referência</strong>' : ''}`;
     const K = s.estrut_s.length, j = cam ? cam.Ks.indexOf(K) : -1;
+    const igual = i === this.iRef ? 'é o modelo atual' : s.f1.combinada >= 0.999 ? 'mesmas fronteiras do modelo atual' : `${Math.round(100 * s.f1.combinada)}% das fronteiras coincidem com o modelo atual`;
     this.$('[data-r="kpis"]').innerHTML = [
-      kpi('Penalidade', pTxt, `${num(s.fator, 2)}x da referência`),
-      kpi('Segmentos combinados', s.comb_s.length + 1, i === this.iRef ? 'referência' : `F1 vs. ref. ${num(s.f1.combinada, 2)}`),
-      kpi('Segmentos estruturais', cam ? K + 1 : '—', j >= 0 ? `ótimo de ${num(cam.inf[j], 2)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 2) : '∞'}` : ''),
-      kpi('Segmentos funcionais', s.func_s.length + 1, s.pen_func !== null ? `penalidade l2 ${num(s.pen_func, 2)}` : 'sem IGG'),
-      kpi('Custo Q estrutural', j >= 0 ? num(cam.Q[j], 1) : '—', '−2 log-verossimilhança'),
-      kpi('Resíduos', s.aud.shapiro_p !== undefined && s.aud.shapiro_p !== null ? `SW ${num(s.aud.shapiro_p, 3)}` : '—', s.aud.ljung_box_p !== undefined && s.aud.ljung_box_p !== null ? `Ljung-Box ${num(s.aud.ljung_box_p, 3)}` : 'auditoria não aplicável'),
+      kpi('Penalidade', pTxt, `${num(s.fator, 2)}x a do modelo atual`),
+      kpi('Segmentos combinados', s.comb_s.length + 1, igual),
+      kpi('Segmentos estruturais (d0)', cam ? K + 1 : '—', j >= 0 ? `mesma solução de ${num(cam.inf[j], 1)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 1) : '∞'}` : ''),
+      kpi('Segmentos funcionais (IGG)', s.func_s.length + 1, ''),
     ].join('');
     GP.grafPasso(this.$('[data-r="graf-passo"]'), a, s, { anterior: ant, alvo: this.alvo, titulo: `SRE ${esc(sre || '')} · passo ${i + 1}/${this.passos.length} · penalidade ${pTxt}` });
     const linhas = M.explicarPasso(a, s, ant, cam, this.alvo, this.ctx.p);
@@ -199,6 +195,7 @@ export class Sensibilidade {
       return `<p><strong>${nomes[t]}:</strong> ${f.length} quebra(s) removida(s) por não haver diferença significativa entre os vizinhos (p > ${num(this.ctx.p.ALPHA_TESTE, 2)}): `
         + f.map((x) => `km ${num(a.ini[x.quebra], 1)} (p = ${num(x.p, 3)})`).join(', ') + '.</p>';
     });
+    if (s.aud.shapiro_p !== undefined && s.aud.shapiro_p !== null) blocos.push(`<p><strong>Resíduos estruturais:</strong> Shapiro p = ${num(s.aud.shapiro_p, 3)} · Ljung-Box p = ${num(s.aud.ljung_box_p, 3)} (p &gt; ${num(this.ctx.p.ALPHA_TESTE, 2)} = premissa atendida).</p>`);
     blocos.push(`<p>PELT bruto antes das fusões: funcional ${s.bruto.funcional}, estrutural ${s.bruto.estrutural}, combinada ${s.bruto.combinada} quebras.</p>`);
     if (s.cand_func.length) blocos.push(`<p><strong>Penalidade funcional:</strong> ${s.cand_func.length} candidatas na faixa; venceu ${num(s.pen_func, 3)} (menor BIC).</p>`);
     this.$('[data-r="fusoes"]').innerHTML = blocos.join('');
@@ -206,18 +203,8 @@ export class Sensibilidade {
   }
 
   resumo() {
-    const { a, cam, betaMin } = this.ctx;
+    const { a } = this.ctx;
     GP.grafSegmentosPen(this.$('[data-r="graf-nseg"]'), this.passos, this.alvo, this.iRef, this.iSel, (i) => this.selecionar(i));
-    const elC = this.$('[data-r="graf-crops"]');
-    if (cam && cam.Ks.length > 1) {
-      const crops = cam.Ks.map((k, j) => ({ k_quebras: k, beta_inf: cam.inf[j], beta_sup: Number.isFinite(cam.sup[j]) ? cam.sup[j] : null }));
-      const marcas = this.alvo === 'estrutural'
-        ? this.passos.map((s, i) => ({ beta: s.penalidade, cor: GP.corPasso(i, this.passos.length, this.iRef), largura: i === this.iSel ? 3 : i === this.iRef ? 2.2 : 1.1 }))
-        : [{ beta: this.ctx.betaRef, cor: GP.corPasso(0, 1, 0), largura: 2.2, rotulo: 'penalidade estrutural (fixa neste modo)' }];
-      grafCrops(elC, crops, betaMin ?? cam.inf[cam.inf.length - 1], marcas, null);
-    } else {
-      elC.innerHTML = '<p class="sub vazio">Sem caminho CROPS (SRE sem d0 suficiente).</p>';
-    }
     GP.grafFaixasPassos(this.$('[data-r="graf-faixas"]'), a, this.passos, this.alvo, this.iRef, this.iSel, (i) => this.selecionar(i));
   }
 

@@ -331,3 +331,30 @@ tr.ref td { background: var(--destaque-suave); }
   :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); }
 }
 :root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); }
+
+/* ── sensibilidade: escolha do SRE ── */
+.sugestoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-top: 4px; }
+.sugestao { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--borda-forte); border-radius: 8px; background: var(--superficie); color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+.sugestao:hover { border-color: var(--destaque); }
+.sugestao span { font-size: 12px; color: var(--texto-mudo); }
+.detalhes-rede > summary { cursor: pointer; min-height: 32px; list-style-position: inside; }
+.detalhes-rede[open] > summary { margin-bottom: 12px; }
+
+/* ── metodologia ── */
+.indice { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 20px; }
+.indice a { padding: 8px 14px; border: 1px solid var(--borda-forte); border-radius: 999px; background: var(--superficie); color: var(--texto-2); text-decoration: none; font-size: 13px; }
+.indice a:hover { border-color: var(--destaque); color: var(--destaque-texto); }
+.acordeao { display: flex; flex-direction: column; gap: 8px; }
+.acordeao details { border: 1px solid var(--borda); border-radius: 10px; padding: 0 14px; }
+.acordeao summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.acordeao details[open] { padding-bottom: 14px; }
+.acordeao p { margin: 0 0 10px; color: var(--texto-2); max-width: 820px; }
+.pergunta { border: 1px solid var(--borda); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
+.pergunta legend { font-weight: 600; padding: 0 4px; }
+.opcoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.opcao { min-height: 44px; padding: 0 16px; border: 1px solid var(--borda-forte); border-radius: 8px; background: var(--superficie); color: var(--texto); font: inherit; cursor: pointer; }
+.opcao:hover:not(:disabled) { border-color: var(--destaque); }
+.opcao:disabled { cursor: default; }
+.opcao.certa { background: var(--ok-fundo); border-color: #2e9d6a; color: var(--ok); font-weight: 600; }
+.opcao.errada { background: #fdecec; border-color: #d64545; color: #a12020; }
+.resposta { margin: 10px 0 0; color: var(--texto-2); }
