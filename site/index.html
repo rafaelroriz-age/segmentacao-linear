@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Segmentação Homogênea</title>
-<meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → 200 m) e análise de sensibilidade da penalidade.">
+<meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → segmentos homogêneos → intervalos de 200 m), sensibilidade da penalidade por SRE e execução do modelo com dados próprios.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e8890c'/%3E%3Cpath d='M6 24 L13 9 L19 19 L26 7' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="css/estilo.css">
@@ -19,12 +19,13 @@
     <span class="logo" aria-hidden="true"></span>
     <div>
       <strong>Segmentação Homogênea</strong>
-      <small>Malha rodoviária — SRE até 200 m</small>
+      <small>Malha rodoviária — SRE, segmentos homogêneos e intervalos de 200 m</small>
     </div>
   </div>
   <nav class="abas-topo" role="tablist">
     <button class="aba-topo ativa" data-pagina="painel" role="tab">Painel da malha</button>
     <button class="aba-topo" data-pagina="rede" role="tab">Sensibilidade da rede</button>
+    <button class="aba-topo" data-pagina="rodar" role="tab">Rodar o modelo</button>
     <button class="aba-topo" data-pagina="metodo" role="tab">Metodologia</button>
   </nav>
 </header>
@@ -61,20 +62,39 @@
             <h2>Mapa da malha</h2>
             <p class="sub" id="mapa-sub">Rodovias cadastradas</p>
           </div>
-          <div class="ferramentas-mapa">
-            <label class="campo-busca">
-              <span class="vh">Buscar SRE</span>
-              <input id="busca-sre" list="lista-sres" placeholder="Buscar SRE (ex.: 320EGO0130)" autocomplete="off">
-              <datalist id="lista-sres"></datalist>
-            </label>
-            <label class="vh" for="modo-mapa">Colorir por</label>
+          <label class="campo-busca">
+            <span class="vh">Buscar SRE</span>
+            <input id="busca-sre" list="lista-sres" placeholder="Buscar SRE (ex.: 320EGO0130)" autocomplete="off">
+            <datalist id="lista-sres"></datalist>
+          </label>
+        </div>
+        <div class="ferramentas-mapa">
+          <label class="controle"><span class="rot-controle">Camada</span>
+            <select id="camada-mapa">
+              <option value="auto">Automática pelo zoom</option>
+              <option value="sre">SREs</option>
+              <option value="seg">Segmentos homogêneos</option>
+              <option value="int">Intervalos de 200 m</option>
+            </select></label>
+          <label class="controle"><span class="rot-controle">Segmentação</span>
+            <select id="tipo-mapa">
+              <option value="combinada">Combinada (2 etapas)</option>
+              <option value="estrutural">Estrutural (d0)</option>
+              <option value="funcional">Funcional (IGG)</option>
+            </select></label>
+          <label class="controle"><span class="rot-controle">Colorir por</span>
             <select id="modo-mapa">
-              <option value="sre">Segmentação S.R.E</option>
+              <option value="sre">Segmento (cores alternadas)</option>
               <option value="iri">IRI</option>
               <option value="igg">IGG</option>
               <option value="d0">Deflexão (d0)</option>
-            </select>
-          </div>
+            </select></label>
+        </div>
+        <div class="niveis" id="niveis-mapa" aria-live="polite">
+          <span class="nivel" data-n="sre">SREs</span><span class="seta">→</span>
+          <span class="nivel" data-n="seg">Segmentos homogêneos</span><span class="seta">→</span>
+          <span class="nivel" data-n="int">Intervalos de 200 m</span>
+          <span class="nivel-texto" id="nivel-texto"></span>
         </div>
         <div id="mapa" class="mapa"></div>
         <div id="legenda-mapa" class="legenda legenda-mapa"></div>
@@ -93,41 +113,28 @@
           <button class="btn-fechar" id="det-fechar" aria-label="Fechar detalhe">×</button>
         </div>
         <div class="kpis" id="det-kpis"></div>
-        <nav class="abas" role="tablist">
+        <nav class="abas" role="tablist" id="abas-sre">
           <button class="aba ativa" data-aba="modelo" role="tab">Modelo atual</button>
-          <button class="aba" data-aba="sens" role="tab">Análise de sensibilidade</button>
+          <button class="aba" data-aba="sens" role="tab">Sensibilidade (grade de penalidades)</button>
           <button class="aba" data-aba="tabelas" role="tab">Planilha de saída</button>
+          <button class="aba" data-aba="dados" role="tab">Dados de 200 m</button>
         </nav>
 
         <div class="painel-aba ativo" id="aba-modelo">
           <p class="nota" id="nota-modelo"></p>
           <div id="graf-perfil" class="graf graf-perfil"></div>
           <div class="duas-colunas">
-            <div><h3>Diagnóstico CROPS</h3><p class="sub">Nº de quebras ótimo em função de β (Biswas &amp; Kuna, Fig. 9)</p><div id="graf-crops" class="graf graf-medio"></div></div>
+            <div><h3>Diagnóstico CROPS</h3><p class="sub">Nº de quebras estruturais ótimo para cada penalidade (Biswas &amp; Kuna, Fig. 9)</p><div id="graf-crops" class="graf graf-medio"></div></div>
             <div><h3>Q-Q dos resíduos padronizados</h3><p class="sub" id="sub-qq"></p><div id="graf-qq" class="graf graf-medio"></div></div>
           </div>
           <h3>Auditoria dos resíduos estruturais</h3>
+          <p class="sub">Testes das premissas do PELT normal em cada cenário de penalidade gravado no banco. Verde = premissa atendida.</p>
           <div id="tab-auditoria" class="tabela-rolagem"></div>
         </div>
 
         <div class="painel-aba" id="aba-sens">
-          <p class="nota" id="nota-sens"></p>
-          <div class="cab-cartao">
-            <h3>Cenário</h3>
-            <div class="chips" id="chips-fator"></div>
-          </div>
-          <div id="kpis-fator" class="kpis kpis-compactos"></div>
-          <div id="graf-perfil-fator" class="graf graf-perfil"></div>
-          <h3>Posição das quebras em cada cenário</h3>
-          <p class="sub">Cada linha é um fator sobre β; a referência (1x) está em destaque.</p>
-          <div id="graf-faixas" class="graf graf-faixas"></div>
-          <div class="duas-colunas">
-            <div><h3>β testados no caminho CROPS</h3><p class="sub" id="sub-crops-sens"></p><div id="graf-crops-sens" class="graf graf-medio"></div></div>
-            <div><h3>Segmentos por cenário</h3><p class="sub">Número de segmentos de cada tipo em função do fator</p><div id="graf-nseg" class="graf graf-medio"></div></div>
-          </div>
-          <h3>Concordância com a referência</h3>
-          <p class="sub" id="sub-f1"></p>
-          <div id="graf-f1" class="graf graf-medio"></div>
+          <p class="sub">Calculada no navegador com o mesmo algoritmo do notebook (PELT, caminho CROPS, fusões e auditoria). Mude a grade, a penalidade que varia e o nº de passos; cada passo atualiza o mapa.</p>
+          <div id="sens-sre"></div>
         </div>
 
         <div class="painel-aba" id="aba-tabelas">
@@ -144,6 +151,14 @@
           </div>
           <div id="tab-segmentos" class="tabela-rolagem"></div>
         </div>
+
+        <div class="painel-aba" id="aba-dados">
+          <div class="cab-cartao">
+            <p class="sub">Dataset original deste SRE: um registro por intervalo de ~200 m, com os sinais usados pelo modelo. Valores sem medição foram interpolados ao longo do SRE (coluna “medido” = não).</p>
+            <button class="btn btn-sec" id="btn-csv-dados">Baixar CSV</button>
+          </div>
+          <div id="tab-dados" class="tabela-rolagem"></div>
+        </div>
       </div>
     </section>
   </section>
@@ -151,12 +166,13 @@
   <!-- ── Sensibilidade da rede ───────────────────────────────────────────── -->
   <section class="pagina" id="pagina-rede">
     <article class="cartao">
-      <h2>Sensibilidade da segmentação à penalidade <span class="sem-caixa">β</span></h2>
+      <h2>Sensibilidade da segmentação à penalidade</h2>
       <p class="sub" id="rede-sub"></p>
       <div class="kpis" id="rede-kpis"></div>
+      <p class="sub">Para ver a grade de penalidades de um SRE específico, abra o SRE no painel e vá em “Sensibilidade (grade de penalidades)”.</p>
     </article>
     <div class="grade-2">
-      <article class="cartao"><h3>Penalidades testadas sobre o diagnóstico da rede</h3><p class="sub">Total de quebras estruturais na malha (CROPS) × β</p><div id="graf-rede-diag" class="graf graf-medio"></div></article>
+      <article class="cartao"><h3>Penalidades testadas sobre o diagnóstico da rede</h3><p class="sub">Total de quebras estruturais na malha (CROPS) × penalidade</p><div id="graf-rede-diag" class="graf graf-medio"></div></article>
       <article class="cartao"><h3>Densidade de quebras</h3><p class="sub">Quebras por km da malha, por tipo de segmentação</p><div id="graf-rede-densidade" class="graf graf-medio"></div></article>
       <article class="cartao"><h3>Comprimento dos segmentos estruturais</h3><p class="sub">Mediana e faixa p10–p90 (km)</p><div id="graf-rede-comp" class="graf graf-medio"></div></article>
       <article class="cartao"><h3>Homogeneidade interna</h3><p class="sub">CV de d0 ponderado pelo comprimento</p><div id="graf-rede-cv" class="graf graf-medio"></div></article>
@@ -175,27 +191,172 @@
     </article>
   </section>
 
+  <!-- ── Rodar o modelo ──────────────────────────────────────────────────── -->
+  <section class="pagina" id="pagina-rodar">
+    <article class="cartao">
+      <h2>Rodar o modelo do zero</h2>
+      <p class="sub">Escolha os dados, ajuste os parâmetros e rode a segmentação funcional, estrutural e combinada no seu navegador, com o mesmo algoritmo do notebook. Nada é enviado ao servidor.</p>
+      <ol class="passos-rodar">
+        <li>
+          <h3>Dados de entrada</h3>
+          <div class="chips" id="rd-fonte">
+            <button class="chip ativo" data-v="original" type="button">Dataset original da malha</button>
+            <button class="chip" data-v="upload" type="button">Enviar planilha própria</button>
+          </div>
+          <div id="rd-orig" class="caixa-fonte">
+            <p class="sub">Os intervalos de 200 m da malha, como o modelo os usa. Escolha uma regional, a malha inteira ou cole códigos de SRE.</p>
+            <div class="painel-controles">
+              <label class="controle"><span class="rot-controle">Regional</span><select id="rd-regional"></select></label>
+              <label class="controle largo"><span class="rot-controle">Códigos de SRE (opcional)</span><textarea id="rd-lista" rows="2" placeholder="320EGO0130, 010EGO0010…"></textarea></label>
+              <div class="controle"><span class="rot-controle">&nbsp;</span><div class="linha-botoes">
+                <button class="btn" type="button" id="rd-carregar-orig">Usar no modelo</button>
+                <button class="btn btn-sec" type="button" id="rd-baixar-orig">Baixar CSV do dataset original</button></div></div>
+            </div>
+            <p class="sub" id="rd-status-orig"></p>
+          </div>
+          <div id="rd-up" class="caixa-fonte" hidden>
+            <p class="sub">Planilha .xlsx ou .csv com uma linha por intervalo: SRE, km inicial, km final, d0, IGG e IRI. Uma coluna com a sua própria segmentação (rótulo do segmento) é opcional: o site compara as fronteiras dela com as do modelo. <button class="link" type="button" id="rd-modelo-csv">Baixar modelo de planilha</button></p>
+            <div class="painel-controles">
+              <label class="controle"><span class="rot-controle">Arquivo</span><input type="file" id="rd-arquivo" accept=".xlsx,.xls,.csv,.txt"></label>
+              <label class="controle" id="rd-caixa-aba" hidden><span class="rot-controle">Aba</span><select id="rd-aba"></select></label>
+            </div>
+            <div id="rd-caixa-map" hidden>
+              <h4>Colunas</h4>
+              <div class="grade-params" id="rd-mapeamento"></div>
+              <div class="tabela-rolagem baixa" id="rd-previa"></div>
+            </div>
+            <p class="sub" id="rd-status-up"></p>
+          </div>
+        </li>
+        <li>
+          <h3>Geometria (opcional)</h3>
+          <p class="sub">Shapefile compactado (.zip com .shp, .shx, .dbf e .prj) ou GeoJSON com a linha de outro SRE. SREs do dataset que já existem na malha usam a geometria cadastrada. O km é distribuído ao longo da linha do início ao fim.</p>
+          <div class="painel-controles">
+            <label class="controle"><span class="rot-controle">Arquivo de geometria</span><input type="file" id="rd-geo" accept=".zip,.shp,.geojson,.json"></label>
+            <div id="rd-caixa-geo" class="painel-controles" hidden>
+              <label class="controle"><span class="rot-controle">Campo com o código do SRE</span><select id="rd-campo-sre"></select></label>
+              <label class="controle param-bool"><span class="rot-controle">Inverter sentido do km</span><input type="checkbox" id="rd-inverter"></label>
+            </div>
+          </div>
+          <p class="sub" id="rd-status-geo"></p>
+        </li>
+        <li>
+          <h3>Parâmetros</h3>
+          <div class="grade-params">
+            <label class="param"><span>Penalidade estrutural <button class="ajuda" type="button" title="Penalidade do PELT normal sobre d0: cada quebra custa este valor. O notebook usa o cotovelo da curva “quebras na malha × penalidade” (o ponto a partir do qual aumentar a penalidade quase não remove quebras).">?</button></span>
+              <select id="rd-modo-beta">
+                <option value="rede">Cotovelo do seu dataset (como a v8)</option>
+                <option value="malha" id="rd-penalidade-malha">A mesma da malha</option>
+                <option value="sre">Cotovelo de cada SRE (Biswas &amp; Kuna)</option>
+                <option value="fixo">Valor fixo</option>
+              </select></label>
+            <label class="param"><span>Valor fixo da penalidade estrutural</span><input type="number" step="any" id="rd-beta-fixo" disabled></label>
+            <label class="param"><span>Quociente funcional α_km <button class="ajuda" type="button" title="A penalidade funcional é α_km × extensão do SRE (penalidade por km), para SREs curtos e longos terem densidade de quebras parecida. A v8 calibra α_km pelo mínimo da soma do BIC numa amostra de SREs.">?</button></span>
+              <select id="rd-modo-alpha">
+                <option value="malha" id="rd-alpha-malha">O mesmo da malha</option>
+                <option value="calibrar">Calibrar no seu dataset (mínimo do BIC)</option>
+                <option value="fixo">Valor fixo</option>
+              </select></label>
+            <label class="param"><span>Valor fixo de α_km</span><input type="number" step="any" id="rd-alpha-fixo" disabled></label>
+          </div>
+          <div id="rd-params"></div>
+          <button class="btn btn-sec" type="button" id="rd-restaurar">Restaurar parâmetros padrão</button>
+        </li>
+        <li>
+          <h3>Rodar</h3>
+          <div class="linha-botoes">
+            <button class="btn" type="button" id="rd-rodar" disabled>Rodar o modelo</button>
+            <span class="sub" id="rd-rotulo-dataset">Nenhum dataset escolhido.</span>
+          </div>
+          <div id="rd-progresso" class="progresso" hidden><progress id="rd-barra" max="1" value="0"></progress><span id="rd-etapa"></span></div>
+        </li>
+      </ol>
+    </article>
+
+    <section id="rd-resultado" hidden>
+      <article class="cartao">
+        <div class="cab-cartao">
+          <h2>Resultado</h2>
+          <div class="linha-botoes"><button class="btn btn-sec" type="button" id="rd-csv">Baixar CSV</button><button class="btn btn-sec" type="button" id="rd-xlsx">Baixar Excel</button></div>
+        </div>
+        <div class="kpis" id="rd-kpis"></div>
+        <p class="nota" id="rd-nota-res"></p>
+        <div class="duas-colunas">
+          <div><h3>Diagnóstico do seu dataset</h3><p class="sub">Total de quebras estruturais × penalidade; o cotovelo é a penalidade da rede.</p><div class="graf graf-medio" id="rd-graf-diag"></div></div>
+          <div id="rd-caixa-calib"><h3>Calibração funcional</h3><p class="sub">Soma do BIC × α_km; o mínimo define o α_km.</p><div class="graf graf-medio" id="rd-graf-calib"></div></div>
+        </div>
+        <h3>Mapa do resultado</h3>
+        <div class="ferramentas-tabela">
+          <label class="controle"><span class="rot-controle">Segmentação</span><select id="rd-tipo-mapa"><option value="combinada">Combinada</option><option value="estrutural">Estrutural</option><option value="funcional">Funcional</option></select></label>
+        </div>
+        <p class="sub" id="rd-sem-geo" hidden>Nenhum SRE do dataset tem geometria: envie um shapefile ou use códigos de SRE da malha.</p>
+        <div id="rd-mapa" class="mapa mapa-medio"></div>
+        <h3>SREs</h3>
+        <div id="rd-tabela-geral" class="tabela-rolagem baixa"></div>
+      </article>
+      <article class="cartao">
+        <div class="cab-cartao">
+          <h2>SRE</h2>
+          <select id="rd-sre"></select>
+        </div>
+        <nav class="abas" id="rd-abas">
+          <button class="aba ativa" data-aba="seg" type="button">Segmentação e explicação</button>
+          <button class="aba" data-aba="sens" type="button">Sensibilidade (grade de penalidades)</button>
+        </nav>
+        <div class="rd-painel painel-aba ativo" id="rd-aba-seg">
+          <div class="graf" id="rd-graf-sre"></div>
+          <div class="explicacao" id="rd-explicacao"></div>
+          <h3>Segmentos</h3>
+          <div class="tabela-rolagem" id="rd-tabela-sre"></div>
+        </div>
+        <div class="rd-painel painel-aba" id="rd-aba-sens"><div id="rd-sens"></div></div>
+      </article>
+    </section>
+  </section>
+
   <!-- ── Metodologia ─────────────────────────────────────────────────────── -->
   <section class="pagina" id="pagina-metodo">
     <article class="cartao texto">
       <h2>Metodologia</h2>
-      <p>Cada SRE (Seção Rodoviária de Estudo) é dividido em intervalos de ~200 m com d0 (deflexão FWD), IGG e IRI. A segmentação homogênea agrupa intervalos contíguos de comportamento semelhante, com três leituras:</p>
+      <p>Cada SRE (Seção Rodoviária de Estudo) é dividido em intervalos de ~200 m com d0 (deflexão FWD), IGG e IRI. A segmentação homogênea agrupa intervalos contíguos de comportamento semelhante. O mapa mostra os três níveis: o SRE inteiro (zoom de longe), os segmentos homogêneos (zoom intermediário) e os intervalos de 200 m dentro deles (zoom de perto).</p>
+      <h3>As três segmentações</h3>
       <ul>
-        <li><strong>Funcional</strong> — PELT com custo <code>l2</code> sobre o IGG padronizado. A penalidade é proporcional à extensão (<code>α_km × km</code>), calibrada pelo mínimo da soma do BIC numa amostra estratificada de SREs, com banda de ±50% escolhida por BIC em cada SRE. Seções vizinhas sem diferença de média (Welch) são fundidas.</li>
-        <li><strong>Estrutural</strong> — PELT com custo <code>normal</code> (média e variância próprias por segmento) sobre o d0 bruto, como em Biswas &amp; Kuna (2022). O caminho CROPS dá todas as segmentações ótimas em função de β; o β da rede é o cotovelo da curva “quebras na malha × β”.</li>
-        <li><strong>Combinada</strong> — em duas etapas: as bases funcionais são subsegmentadas pelo PELT <code>normal</code> com o mesmo β; quebras funcionais a menos de 0,4 km de uma estrutural são absorvidas, segmentos menores que 0,6 km são evitados e vizinhos sem diferença em d0 (média e variância) nem em IGG são fundidos.</li>
+        <li><strong>Funcional</strong> — PELT com custo <code>l2</code> sobre o IGG padronizado (mudança de nível). A penalidade é proporcional à extensão (<code>α_km × km</code>), com α_km calibrado pelo mínimo da soma do BIC numa amostra estratificada de SREs; em cada SRE o modelo testa uma faixa de ±50% e fica com a de menor BIC. Seções vizinhas sem diferença de média (Welch) são fundidas.</li>
+        <li><strong>Estrutural</strong> — PELT com custo <code>normal</code> (média e variância próprias por segmento) sobre o d0 bruto, como em Biswas &amp; Kuna (2022). O caminho CROPS dá todas as segmentações ótimas em função da penalidade; a penalidade da rede é o cotovelo da curva “quebras na malha × penalidade”.</li>
+        <li><strong>Combinada</strong> — em duas etapas: as bases funcionais são subsegmentadas pelo PELT <code>normal</code> com a mesma penalidade; quebras funcionais a menos de 0,4 km de uma estrutural são absorvidas, segmentos menores que 0,6 km são evitados e vizinhos sem diferença em d0 (média e variância) nem em IGG são fundidos.</li>
       </ul>
-      <p>A <strong>análise de sensibilidade</strong> repete toda a segmentação com β multiplicado por fatores (0,25x a 3x). O fator 1x é o modelo atual. Para cada SRE o site mostra as quebras de cada cenário, o número de segmentos, a concordância (F1) com a referência e a faixa de β em que a segmentação estrutural da referência continua ótima no caminho CROPS.</p>
+      <h3>O que a penalidade faz</h3>
+      <p>O PELT escolhe as quebras que minimizam <code>custo do ajuste + penalidade × nº de quebras</code>. Uma quebra só entra se reduzir o custo do ajuste em mais do que a penalidade: penalidade baixa gera muitos segmentos curtos; penalidade alta, poucos segmentos longos. Para a estrutural, o custo é <code>Q = Σ n·log(variância)</code> de cada segmento (−2 × log-verossimilhança gaussiana).</p>
+      <h3>Análise de sensibilidade por SRE</h3>
+      <p>Na aba “Sensibilidade (grade de penalidades)” de cada SRE, o site refaz toda a segmentação para uma grade crescente de penalidades e mostra um gráfico por penalidade. A grade padrão é o <strong>caminho exato</strong>: um passo para cada solução distinta do caminho CROPS, então de um passo para o seguinte a segmentação estrutural sempre muda. Também é possível usar uma grade linear ou logarítmica, variar a penalidade funcional (α_km) e escolher o nº de passos. Cada passo traz o texto do que mudou (quebras removidas e novas, com médias e desvios dos dois lados) e por quê (quanto o ajuste piorou × quanto a penalidade economizou).</p>
+      <p>A sensibilidade da rede (aba própria) repete a segmentação da malha inteira com a penalidade multiplicada por fatores de 0,25x a 3x; o fator 1x é o modelo atual.</p>
+      <h3>Rodar o modelo com outros dados</h3>
+      <p>A aba “Rodar o modelo” roda o mesmo algoritmo no navegador sobre o dataset original da malha (por regional ou lista de SREs) ou sobre uma planilha enviada, com geometria opcional em shapefile ou GeoJSON. Todos os parâmetros podem ser alterados, e cada parâmetro tem uma explicação. Se a planilha trouxer uma segmentação própria, o site compara as fronteiras dela com as do modelo (F1).</p>
+      <h3>Fidelidade ao notebook</h3>
+      <p>O código do site (<code>site/js/modelo.js</code>) reproduz o notebook <code>segmentacao_rede_v8_sensibilidade.ipynb</code>. Com os dados exatos, 64.267 de 64.272 segmentações (8 cenários × 3 tipos × 2.678 SREs) saem idênticas; com os valores arredondados do banco, 99,8%. As diferenças restantes são empates numéricos entre duas quebras vizinhas. O teste está em <code>tools/validar_modelo_js.mjs</code>.</p>
+      <h3>Glossário</h3>
+      <dl class="glossario">
+        <dt>SRE</dt><dd>Seção Rodoviária de Estudo, unidade básica de gerência.</dd>
+        <dt>Intervalo de 200 m</dt><dd>Registro do dataset: d0, IGG e IRI médios de um trecho de ~200 m. Valores sem medição são interpolados ao longo do SRE.</dd>
+        <dt>d0</dt><dd>Deflexão máxima da bacia FWD — resposta estrutural.</dd>
+        <dt>IGG / IRI</dt><dd>Índice de gravidade global e irregularidade longitudinal — respostas funcionais.</dd>
+        <dt>ACA</dt><dd>Diferença acumulada de d0 (método CDA); seus extremos indicam pontos de mudança.</dd>
+        <dt>PELT</dt><dd>Algoritmo exato de detecção de pontos de mudança (Killick et al., 2012).</dd>
+        <dt>Penalidade</dt><dd>Custo de cada quebra no PELT. Controla o nº de segmentos.</dd>
+        <dt>α_km</dt><dd>Quociente de penalidade funcional: penalidade por km de SRE.</dd>
+        <dt>CROPS</dt><dd>Caminho de soluções ótimas do PELT para todas as penalidades (Haynes et al., 2017).</dd>
+        <dt>Cotovelo</dt><dd>Ponto da curva quebras × penalidade a partir do qual aumentar a penalidade quase não remove quebras.</dd>
+        <dt>F1</dt><dd>Concordância entre dois conjuntos de quebras (0 a 1), com tolerância em km.</dd>
+      </dl>
       <p>As classes de condição usam IGG (DNIT 006/2003-PRO) e IRI (DNIT/IPR-745). As faixas de d0 são provisórias e podem ser trocadas na tabela <code>classe_limite</code>.</p>
       <h3>Segurança dos dados</h3>
-      <p>Os dados ficam no Postgres do Supabase e são públicos para leitura. O acesso é controlado no banco: Row Level Security em todas as tabelas, sem permissão direta de leitura ou escrita nas tabelas, e duas funções somente leitura como única porta de entrada. Nenhuma escrita é possível pela API.</p>
+      <p>Os dados ficam no Postgres do Supabase e são públicos para leitura. O acesso é controlado no banco: Row Level Security em todas as tabelas, sem permissão direta de leitura ou escrita nas tabelas, e funções somente leitura como única porta de entrada. Nenhuma escrita é possível pela API. Arquivos enviados na aba “Rodar o modelo” ficam só no navegador.</p>
       <p class="sub" id="metodo-meta"></p>
     </article>
   </section>
 </main>
 
 <div id="carregando" class="carregando" hidden><span class="spinner"></span><span id="carregando-txt">Carregando…</span></div>
-<div id="dica" class="dica" role="tooltip" hidden></div>
 
 <script type="module" src="js/app.js"></script>
 </body>

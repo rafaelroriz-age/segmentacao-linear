@@ -1,10 +1,13 @@
-import { modoLocal, carregarRede, carregarSre } from './dados.js';
+import { modoLocal, carregarRede, carregarSre, carregarSegmentosRede, carregarIntervalos } from './dados.js';
 import { Mapa } from './mapa.js';
 import * as G from './graficos.js';
+import * as M from './modelo.js';
+import { Sensibilidade } from './sensibilidade.js';
 import { num, km, fatorTxt, esc, TIPOS, residuosPadronizados, baixarCsv } from './util.js';
 
 const $ = (id) => document.getElementById(id);
-const estado = { rede: null, mapa: null, pac: null, sre: null, fatorSens: 1, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false };
+const estado = { rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
+const CHAVE_KM = { funcional: 'func_km', estrutural: 'estrut_km', combinada: 'comb_km' };
 
 // ── carregamento ──────────────────────────────────────────────────────────────
 function carregando(txt) {
@@ -19,10 +22,6 @@ function erro(msg) {
 
 async function iniciar() {
   if (modoLocal) $('aviso-local').hidden = false;
-  await abrirApp();
-}
-
-async function abrirApp() {
   carregando('Carregando a malha…');
   try {
     estado.rede = await carregarRede();
@@ -43,16 +42,26 @@ function ligarNavegacao() {
     document.querySelectorAll('.aba-topo').forEach((x) => x.classList.toggle('ativa', x === b));
     document.querySelectorAll('.pagina').forEach((p) => p.classList.toggle('ativa', p.id === `pagina-${b.dataset.pagina}`));
     if (b.dataset.pagina === 'rede' && !estado.redeDesenhada) { montarRede(); estado.redeDesenhada = true; }
+    if (b.dataset.pagina === 'rodar') abrirRodar();
     if (b.dataset.pagina === 'painel') { estado.mapa.invalidar(); G.redimensionar($('pagina-painel')); }
   }));
-  document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => {
-    document.querySelectorAll('.aba').forEach((x) => x.classList.toggle('ativa', x === b));
-    document.querySelectorAll('.painel-aba').forEach((p) => p.classList.toggle('ativo', p.id === `aba-${b.dataset.aba}`));
+  document.querySelectorAll('#abas-sre .aba').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('#abas-sre .aba').forEach((x) => x.classList.toggle('ativa', x === b));
+    document.querySelectorAll('#detalhe .painel-aba').forEach((p) => p.classList.toggle('ativo', p.id === `aba-${b.dataset.aba}`));
     desenharAba(b.dataset.aba);
   }));
 }
 
-const abaAtiva = () => document.querySelector('.aba.ativa').dataset.aba;
+const abaAtiva = () => document.querySelector('#abas-sre .aba.ativa').dataset.aba;
+
+async function abrirRodar() {
+  if (estado.rodar) return;
+  const { Rodar } = await import('./rodar.js');
+  estado.rodar = new Rodar($('pagina-rodar'), {
+    rede: estado.rede,
+    aoMostrarNoMapa: (geojson, rotulo) => estado.mapa.mostrarExtra(geojson, rotulo),
+  });
+}
 
 // ── painel: parâmetros, regionais e mapa ─────────────────────────────────────
 function montarPainel() {
@@ -67,32 +76,59 @@ function montarPainel() {
   }));
 
   const ext = sres.reduce((a, s) => a + (s.extensao_km || 0), 0);
-  $('mapa-sub').textContent = `${sres.length.toLocaleString('pt-BR')} SREs · ${num(ext, 0)} km · ${meta.n_intervalos.toLocaleString('pt-BR')} intervalos de 200 m`;
+  $('mapa-sub').textContent = `${num(sres.length, 0)} SREs · ${num(ext, 0)} km · ${num(meta.n_intervalos ?? 0, 0)} intervalos de 200 m`;
   $('lista-sres').innerHTML = sres.map((s) => `<option value="${esc(s.sre)}">${esc(s.rodovia || '')} · km ${km(s.km_inicial)}–${km(s.km_final)}</option>`).join('');
   $('busca-sre').addEventListener('change', (e) => {
     const v = e.target.value.trim().toUpperCase();
     if (sres.some((s) => s.sre === v)) selecionarSre(v);
   });
 
-  estado.mapa = new Mapa('mapa', selecionarSre);
-  estado.mapa.carregarMalha(sres, limites);
-  $('legenda-mapa').innerHTML = estado.mapa.legenda();
-  $('modo-mapa').addEventListener('change', (e) => {
-    estado.mapa.definirModo(e.target.value);
+  estado.mapa = new Mapa('mapa', selecionarSre, {
+    segmentos: carregarSegmentosRede,
+    intervalos: (lista) => carregarIntervalos(lista, true),
+  }, (info) => {
+    $('nivel-texto').textContent = info.texto;
+    document.querySelectorAll('#niveis-mapa .nivel').forEach((n) => n.classList.toggle('ativo', n.dataset.n === info.nivel));
     $('legenda-mapa').innerHTML = estado.mapa.legenda();
   });
+  estado.mapa.carregarMalha(sres, limites);
+  $('modo-mapa').addEventListener('change', (e) => estado.mapa.definirModo(e.target.value));
+  $('camada-mapa').addEventListener('change', (e) => estado.mapa.definirCamada(e.target.value));
+  $('tipo-mapa').addEventListener('change', (e) => { estado.mapa.definirTipo(e.target.value); redesenharDetalheMapa(); });
+  document.querySelectorAll('#niveis-mapa .nivel').forEach((n) => n.addEventListener('click', () => {
+    const zoom = { sre: 8, seg: 11, int: 14 }[n.dataset.n];
+    $('camada-mapa').value = 'auto';
+    estado.mapa.definirCamada('auto');
+    // com um SRE selecionado, aproxima nele; senão, no centro atual
+    const linha = estado.sre && estado.mapa.linhas.get(estado.sre);
+    if (linha) estado.mapa.map.setView(linha.getBounds().getCenter(), zoom);
+    else estado.mapa.map.setZoom(zoom);
+  }));
   $('det-fechar').addEventListener('click', fecharDetalhe);
-  $('metodo-meta').textContent = `Dados gerados em ${meta.gerado_em} a partir de ${meta.entrada} (${meta.notebook}). β da rede = ${num(meta.beta_rede, 2)}; α_km funcional = ${num(meta.alpha_km_func, 4)}.`;
+  $('metodo-meta').textContent = `Dados gerados em ${meta.gerado_em} a partir de ${meta.entrada} (${meta.notebook}). Penalidade estrutural da rede = ${num(meta.beta_rede, 2)}; α_km funcional = ${num(meta.alpha_km_func, 4)}.`;
+}
+
+// segmentação do SRE selecionado no mapa: modelo atual do tipo escolhido, ou o passo da sensibilidade
+function redesenharDetalheMapa() {
+  const pac = estado.pac;
+  if (!pac) return;
+  const tipo = $('tipo-mapa').value;
+  if (estado.passoMapa && abaAtiva() === 'sens') {
+    const { passo, rotulo } = estado.passoMapa;
+    estado.mapa.desenharDetalhe(pac, passo[CHAVE_KM[tipo]], rotulo.replace('combinada', tipo));
+    return;
+  }
+  const segs = pac.segmentos.filter((g) => g.fator === 1 && g.tipo === tipo).sort((a, b) => a.seg_id - b.seg_id);
+  estado.mapa.desenharDetalhe(pac, segs.slice(1).map((g) => g.km_inicial), `${tipo}, modelo atual`, segs);
 }
 
 // ── detalhe do SRE ───────────────────────────────────────────────────────────
 async function selecionarSre(sre) {
   estado.sre = sre;
-  estado.fatorSens = 1;
   estado.fatorTabela = 1;
+  estado.passoMapa = null;
   history.replaceState(null, '', `#sre=${encodeURIComponent(sre)}`);
   estado.mapa.selecionar(sre);
-  $('legenda-mapa').innerHTML = estado.mapa.legenda();
   $('busca-sre').value = sre;
   carregando(`Carregando ${sre}…`);
   let pac;
@@ -104,10 +140,11 @@ async function selecionarSre(sre) {
   if (estado.sre !== sre) return;   // outro SRE foi clicado enquanto carregava
   carregando(null);
   estado.pac = pac;
+  estado.a = pac.intervalos.length ? M.arraysDoBanco(pac.intervalos) : null;
+  estado.cam = null;
   $('detalhe').hidden = false;
   cabecalho(pac);
-  estado.mapa.desenharDetalhe(pac, 1);
-  montarChipsFator();
+  redesenharDetalheMapa();
   montarSelFatorTabela();
   desenharAba(abaAtiva());
   $('detalhe').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -115,9 +152,9 @@ async function selecionarSre(sre) {
 
 function fecharDetalhe() {
   $('detalhe').hidden = true;
-  estado.sre = null; estado.pac = null;
+  estado.sre = null; estado.pac = null; estado.passoMapa = null;
+  estado.sens?.parar();
   estado.mapa.limparSelecao();
-  $('legenda-mapa').innerHTML = estado.mapa.legenda();
   history.replaceState(null, '', location.pathname + location.search);
 }
 
@@ -133,8 +170,8 @@ function cabecalho(pac) {
   $('det-kpis').innerHTML = [
     kpi('Extensão', `${num(s.extensao_km, 2)} km`, `${s.n_intervalos} intervalos de 200 m`),
     kpi('Segmentos combinados', s.n_seg_combinada ?? '—', 'modelo atual'),
-    kpi('Segmentos estruturais', s.n_seg_estrutural ?? '—', c && c.beta_estrut !== null ? `β = ${num(c.beta_estrut, 2)}` : 'sem d0'),
-    kpi('Segmentos funcionais', s.n_seg_funcional ?? '—', c && c.pen_func !== null ? `pen = ${num(c.pen_func, 2)}` : 'sem IGG'),
+    kpi('Segmentos estruturais', s.n_seg_estrutural ?? '—', c && c.beta_estrut !== null ? `penalidade ${num(c.beta_estrut, 2)}` : 'sem d0'),
+    kpi('Segmentos funcionais', s.n_seg_funcional ?? '—', c && c.pen_func !== null ? `penalidade ${num(c.pen_func, 2)}` : 'sem IGG'),
     kpi('d0 médio', num(s.d0_medio, 1), `${s.classe_d0} · 0,01 mm`),
     kpi('IGG médio', num(s.igg_medio, 1), s.classe_igg),
     kpi('IRI médio', num(s.iri_medio, 2), `${s.classe_iri} · m/km`),
@@ -144,25 +181,29 @@ function cabecalho(pac) {
 function desenharAba(aba) {
   const pac = estado.pac;
   if (!pac) return;
+  if (aba !== 'sens' && estado.passoMapa) { estado.passoMapa = null; redesenharDetalheMapa(); }
   if (!pac.intervalos.length) {
-    ['nota-modelo', 'nota-sens'].forEach((id) => { $(id).textContent = 'Este SRE não tem intervalos com dados no dataset analítico.'; });
+    $('nota-modelo').textContent = 'Este SRE não tem intervalos com dados no dataset analítico.';
+    $('sens-sre').innerHTML = '<p class="nota">Este SRE não tem intervalos com dados no dataset analítico.</p>';
+    estado.sensSre = null;
     return;
   }
   if (aba === 'modelo') desenharModelo(pac);
   else if (aba === 'sens') desenharSens(pac);
+  else if (aba === 'dados') desenharDados(pac);
   else desenharTabela(pac);
 }
 
 function desenharModelo(pac) {
   const meta = estado.rede.meta;
   const c = cenario(pac, 1) || {};
-  const origem = { rede: 'β da rede (cotovelo)', cotovelo_sre: 'cotovelo do próprio SRE', fallback_rede: 'β da rede', sem_d0: 'sem d0' }[c.origem_beta] || c.origem_beta;
-  $('nota-modelo').innerHTML = `Modelo atual (fator 1x): funcional <strong>${c.quebras_func + 1}</strong> · estrutural <strong>${c.quebras_estrut + 1}</strong> · combinada <strong>${c.quebras_comb + 1}</strong> segmentos. `
-    + (c.beta_estrut !== null && c.beta_estrut !== undefined ? `β estrutural = ${num(c.beta_estrut, 2)} (${esc(origem)}). ` : 'Sem d0 suficiente para a segmentação estrutural. ')
+  const origem = { rede: 'penalidade da rede (cotovelo)', cotovelo_sre: 'cotovelo do próprio SRE', fallback_rede: 'penalidade da rede', sem_d0: 'sem d0' }[c.origem_beta] || c.origem_beta;
+  $('nota-modelo').innerHTML = `Modelo atual: funcional <strong>${c.quebras_func + 1}</strong> · estrutural <strong>${c.quebras_estrut + 1}</strong> · combinada <strong>${c.quebras_comb + 1}</strong> segmentos. `
+    + (c.beta_estrut !== null && c.beta_estrut !== undefined ? `Penalidade estrutural = ${num(c.beta_estrut, 2)} (${esc(origem)}). ` : 'Sem d0 suficiente para a segmentação estrutural. ')
     + `d0 medido em ${num(100 * (c.frac_d0_medido || 0), 0)}% dos intervalos.`;
   G.grafPerfil('graf-perfil', pac, 1);
   const marcas = [];
-  if (c.beta_estrut !== null && c.beta_estrut !== undefined) marcas.push({ beta: c.beta_estrut, cor: G.corFator([1], 0, 0), largura: 2.2, rotulo: `β usado: ${num(c.beta_estrut, 2)}` });
+  if (c.beta_estrut !== null && c.beta_estrut !== undefined) marcas.push({ beta: c.beta_estrut, cor: G.corFator([1], 0, 0), largura: 2.2, rotulo: `penalidade usada: ${num(c.beta_estrut, 2)}` });
   if (c.beta_cotovelo_sre) marcas.push({ beta: c.beta_cotovelo_sre, cor: getComputedStyle(document.documentElement).getPropertyValue('--texto-mudo').trim(), traco: 'dash', rotulo: `cotovelo do SRE: ${num(c.beta_cotovelo_sre, 2)} (K=${c.k_cotovelo_sre})` });
   G.grafCrops('graf-crops', pac.crops, meta.beta_min, marcas, null);
   const z = residuosPadronizados(pac.intervalos, pac.segmentos.filter((s) => s.fator === 1 && s.tipo === 'estrutural'));
@@ -181,70 +222,36 @@ function okFalha(v, inverso = false) {
 }
 
 function tabelaAuditoria(pac) {
-  const cols = ['Cenário', 'β', 'Segmentos', 'Resíduos', 'Shapiro p', 'KS p', 'Normalidade', 'ACF lag 1', 'Ljung-Box p', 'Independência', 'Brown-Forsythe p', 'Heterocedástico', 'Erro padrão médio'];
+  const cols = ['Cenário', 'Penalidade', 'Segmentos', 'Resíduos', 'Shapiro p', 'KS p', 'Normalidade', 'ACF lag 1', 'Ljung-Box p', 'Independência', 'Brown-Forsythe p', 'Heterocedástico', 'Erro padrão médio'];
   const linhas = pac.auditoria.map((a) => `<tr class="${a.fator === 1 ? 'ref' : ''}"><td>${fatorTxt(a.fator)}${a.fator === 1 ? ' (ref.)' : ''}</td><td>${num(a.beta, 2)}</td><td>${a.n_segmentos}</td><td>${a.n_residuos}</td>`
     + `<td>${num(a.shapiro_p, 3)}</td><td>${num(a.ks_p, 3)}</td>${okFalha(a.normalidade_ok)}<td>${num(a.acf_lag1, 3)}</td><td>${num(a.ljung_box_p, 3)}</td>${okFalha(a.independencia_ok)}`
     + `<td>${num(a.brown_forsythe_p, 3)}</td>${okFalha(a.heterocedastico, true)}<td>${num(a.erro_padrao_medio, 2)}</td></tr>`).join('');
   $('tab-auditoria').innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table>`;
 }
 
-// ── sensibilidade do SRE ─────────────────────────────────────────────────────
-function montarChipsFator() {
-  const fatores = estado.rede.meta.fatores;
-  $('chips-fator').innerHTML = fatores.map((f) => `<button class="chip ${f === 1 ? 'ref' : ''} ${f === estado.fatorSens ? 'ativo' : ''}" data-fator="${f}">${fatorTxt(f)}${f === 1 ? ' · ref.' : ''}</button>`).join('');
-  $('chips-fator').querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
-    estado.fatorSens = Number(b.dataset.fator);
-    $('chips-fator').querySelectorAll('.chip').forEach((x) => x.classList.toggle('ativo', x === b));
-    desenharFator(estado.pac);
-    estado.mapa.desenharDetalhe(estado.pac, estado.fatorSens);
-  }));
-}
-
+// ── sensibilidade do SRE: grade de penalidades calculada no navegador ────────
 function desenharSens(pac) {
-  const { fatores, beta_min: betaMin } = estado.rede.meta;
-  const iRef = fatores.indexOf(1);
-  const e = pac.sens_sre;
-  if (e && e.beta_estavel_inf !== null && e.beta_estavel_inf !== undefined) {
-    const sup = e.beta_estavel_sup === null ? 'sem limite superior' : `${num(e.beta_estavel_sup, 2)} (${fatorTxt(e.fator_estavel_sup)})`;
-    $('nota-sens').innerHTML = `A segmentação estrutural da referência (<strong>${e.k_ref} quebras</strong>, β = ${num(e.beta_ref, 2)}) continua ótima para β entre `
-      + `<strong>${num(e.beta_estavel_inf, 2)} (${fatorTxt(e.fator_estavel_inf)})</strong> e <strong>${sup}</strong>. Fora dessa faixa as quebras estruturais mudam.`;
-  } else {
-    $('nota-sens').textContent = 'Este SRE não tem d0 suficiente para o caminho CROPS; só a segmentação funcional existe e ela não depende de β.';
+  if (!estado.sens) {
+    estado.sens = new Sensibilidade($('sens-sre'), {
+      aoMudarPasso: (passo, i, rotulo) => {
+        estado.passoMapa = { passo, rotulo };
+        if (abaAtiva() === 'sens') redesenharDetalheMapa();
+      },
+    });
   }
-  desenharFator(pac);
-  G.grafFaixas('graf-faixas', pac, fatores, iRef);
-
-  const marcas = pac.cenarios.filter((c) => c.beta_estrut !== null).map((c) => ({
-    beta: c.beta_estrut, cor: G.corFator(fatores, fatores.indexOf(c.fator), iRef), largura: c.fator === 1 ? 2.4 : 1.3,
-  }));
-  const faixa = e && e.beta_estavel_inf !== null && e.beta_estavel_inf !== undefined
-    ? { inf: e.beta_estavel_inf, sup: e.beta_estavel_sup, rotulo: `K = ${e.k_ref} ótimo` } : null;
-  $('sub-crops-sens').textContent = 'Linhas verticais: β de cada cenário (laranja = referência); faixa: onde a solução de referência é ótima.';
-  G.grafCrops('graf-crops-sens', pac.crops, betaMin, marcas, faixa);
-
-  const porTipo = (campo) => Object.fromEntries(TIPOS.map((t) => [t, fatores.map((f) => (pac.sens_fator.find((s) => s.fator === f && s.tipo === t) || {})[campo] ?? null)]));
-  const nomes = Object.fromEntries(TIPOS.map((t) => [t, t]));
-  G.grafPorTipo('graf-nseg', porTipo('n_segmentos'), fatores, 'nº de segmentos', { nomes });
-  $('sub-f1').textContent = `F1 entre as quebras de cada cenário e as da referência (tolerância de ${num(estado.rede.meta.sens_tol_km, 1)} km). 1 = mesmas quebras.`;
-  G.grafPorTipo('graf-f1', porTipo('f1_ref'), fatores, 'F1 vs. referência', { nomes, yRange: [0, 1.05], formato: ':.2f' });
-}
-
-function desenharFator(pac) {
-  const f = estado.fatorSens;
-  const c = cenario(pac, f) || {};
-  const sf = (t) => pac.sens_fator.find((s) => s.fator === f && s.tipo === t) || {};
-  $('kpis-fator').innerHTML = [
-    kpi('Fator sobre β', fatorTxt(f), f === 1 ? 'referência (modelo atual)' : ''),
-    kpi('β estrutural', num(c.beta_estrut, 2), ''),
-    ...TIPOS.map((t) => kpi(`Segmentos ${t}`, sf(t).n_segmentos ?? '—', f === 1 ? '' : `F1 vs. ref. ${num(sf(t).f1_ref, 2)}`)),
-  ].join('');
-  G.grafPerfil('graf-perfil-fator', pac, f);
+  if (estado.sensSre === estado.sre) { redesenharDetalheMapa(); return; }
+  const { meta } = estado.rede;
+  const a = estado.a;
+  if (!estado.cam && M.temD0(a)) estado.cam = M.caminhoSre(a, meta.beta_min);
+  const c = cenario(pac, 1) || {};
+  estado.sensSre = estado.sre;
+  estado.sens.definir({ a, cam: estado.cam, alphaRef: meta.alpha_km_func, betaRef: c.beta_estrut ?? meta.beta_rede, betaMin: meta.beta_min, sre: estado.sre });
 }
 
 // ── planilha de saída ────────────────────────────────────────────────────────
 function montarSelFatorTabela() {
   const sel = $('sel-fator-tabela');
-  sel.innerHTML = estado.rede.meta.fatores.map((f) => `<option value="${f}" ${f === 1 ? 'selected' : ''}>${fatorTxt(f)}${f === 1 ? ' (modelo atual)' : ''}</option>`).join('');
+  sel.innerHTML = estado.rede.meta.fatores.map((f) => `<option value="${f}" ${f === 1 ? 'selected' : ''}>${fatorTxt(f)} da penalidade${f === 1 ? ' (modelo atual)' : ''}</option>`).join('');
 }
 
 const COLS_SEG = [
@@ -278,16 +285,30 @@ $('btn-csv').addEventListener('click', () => {
   baixarCsv(`${estado.sre}_${estado.tipoTabela}_${fatorTxt(estado.fatorTabela)}.csv`, linhas);
 });
 
+// ── dados de 200 m ───────────────────────────────────────────────────────────
+function linhasDados(pac) {
+  return pac.intervalos.map((iv, i) => ({ sre: pac.sre.sre, intervalo: i + 1, km_inicial: iv.km_inicial, km_final: iv.km_final, d0: iv.d0, d0_medido: iv.d0_obs,
+    igg: iv.igg, igg_medido: iv.igg_obs, iri: iv.iri, iri_medido: iv.iri_obs, aca: iv.aca }));
+}
+
+function desenharDados(pac) {
+  const sn = (v) => `<td class="${v ? '' : 'interp'}">${v ? 'sim' : 'não'}</td>`;
+  const corpo = linhasDados(pac).map((l) => `<tr><td>${l.intervalo}</td><td>${km(l.km_inicial)}</td><td>${km(l.km_final)}</td><td>${num(l.d0, 2)}</td>${sn(l.d0_medido)}`
+    + `<td>${num(l.igg, 2)}</td>${sn(l.igg_medido)}<td>${num(l.iri, 3)}</td>${sn(l.iri_medido)}<td>${num(l.aca, 2)}</td></tr>`).join('');
+  $('tab-dados').innerHTML = `<table><thead><tr><th>Intervalo</th><th>km inicial</th><th>km final</th><th>d0</th><th>d0 medido</th><th>IGG</th><th>IGG medido</th><th>IRI</th><th>IRI medido</th><th>ACA</th></tr></thead><tbody>${corpo}</tbody></table>`;
+}
+$('btn-csv-dados').addEventListener('click', () => { if (estado.pac) baixarCsv(`${estado.sre}_intervalos_200m.csv`, linhasDados(estado.pac)); });
+
 // ── sensibilidade da rede ────────────────────────────────────────────────────
 function montarRede() {
   const { sens_rede: sr, diag_rede: diag, calib_func: calib, parametros, meta } = estado.rede;
   const fatores = sr.map((r) => r.fator);
   const iRef = fatores.indexOf(1);
   const ref = sr[iRef].metricas;
-  $('rede-sub').textContent = `${meta.n_sres.toLocaleString('pt-BR')} SREs, ${fatores.length} cenários de β (${fatores.map(fatorTxt).join(', ')}). Referência: β = ${num(meta.beta_rede, 2)} (cotovelo da rede).`;
+  $('rede-sub').textContent = `${num(meta.n_sres, 0)} SREs, ${fatores.length} cenários de penalidade estrutural (${fatores.map(fatorTxt).join(', ')} da referência). Referência: penalidade ${num(meta.beta_rede, 2)} (cotovelo da rede).`;
   const kp = (t) => ({ funcional: 'func', estrutural: 'estrut', combinada: 'comb' }[t]);
-  $('rede-kpis').innerHTML = TIPOS.map((t) => kpi(`Segmentos ${t} (ref.)`, ref[`${kp(t)}_segmentos`].toLocaleString('pt-BR'), `mediana ${num(ref[`${kp(t)}_comp_mediano_km`], 2)} km`)).join('')
-    + kpi('SREs auditados', ref.aud_sres.toLocaleString('pt-BR'), `${num(ref.aud_pct_normalidade_ok, 1)}% normais · ${num(ref.aud_pct_independencia_ok, 1)}% independentes`);
+  $('rede-kpis').innerHTML = TIPOS.map((t) => kpi(`Segmentos ${t} (ref.)`, num(ref[`${kp(t)}_segmentos`], 0), `mediana ${num(ref[`${kp(t)}_comp_mediano_km`], 2)} km`)).join('')
+    + kpi('SREs auditados', num(ref.aud_sres, 0), `${num(ref.aud_pct_normalidade_ok, 1)}% normais · ${num(ref.aud_pct_independencia_ok, 1)}% independentes`);
 
   G.grafDiagRede('graf-rede-diag', diag, fatores, meta.beta_rede, iRef, meta.beta_bic);
   const porTipo = (suf, tipos = TIPOS) => Object.fromEntries(tipos.map((t) => [t, sr.map((r) => r.metricas[`${kp(t)}_${suf}`])]));
@@ -311,14 +332,14 @@ function montarRede() {
     G.grafLinha('graf-calib-bic', calib.map((r) => r.alpha_km), calib.map((r) => r.soma_bic), 'α_km', 'soma do BIC', { marcas: marca });
   }
 
-  const cols = [['fator', 'Fator'], ['beta', 'β'], ...TIPOS.flatMap((t) => [[`${kp(t)}_segmentos`, `Seg. ${t}`], [`${kp(t)}_comp_mediano_km`, `Comp. mediano ${t}`], [`${kp(t)}_f1_ref`, `F1 ${t}`], [`${kp(t)}_pct_sres_identicos`, `% SREs idênticos ${t}`]]),
+  const cols = [['fator', 'Fator'], ['beta', 'Penalidade'], ...TIPOS.flatMap((t) => [[`${kp(t)}_segmentos`, `Seg. ${t}`], [`${kp(t)}_comp_mediano_km`, `Comp. mediano ${t}`], [`${kp(t)}_f1_ref`, `F1 ${t}`], [`${kp(t)}_pct_sres_identicos`, `% SREs idênticos ${t}`]]),
     ['aud_pct_normalidade_ok', '% normais'], ['aud_pct_independencia_ok', '% independentes'], ['aud_acf_lag1_mediana', 'ACF lag 1 (mediana)']];
   const corpo = sr.map((r) => `<tr class="${r.fator === 1 ? 'ref' : ''}">${cols.map(([k]) => {
     const v = k === 'fator' ? r.fator : r.metricas[k];
     return `<td>${k === 'fator' ? fatorTxt(v) : typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) : esc(v)}</td>`;
   }).join('')}</tr>`).join('');
   $('tab-rede').innerHTML = `<table><thead><tr>${cols.map(([, r]) => `<th>${r}</th>`).join('')}</tr></thead><tbody>${corpo}</tbody></table>`;
-  $('tab-parametros').innerHTML = `<table><thead><tr><th>Parâmetro</th><th class="txt">Valor</th></tr></thead><tbody>${parametros.map((p) => `<tr><td>${esc(p.parametro)}</td><td class="txt">${esc(p.valor)}</td></tr>`).join('')}</tbody></table>`;
+  $('tab-parametros').innerHTML = `<table><thead><tr><th>Parâmetro</th><th class="txt">Valor</th></tr></thead><tbody>${parametros.map((p) => `<tr><td>${esc(p.parametro.replace(/beta/gi, 'penalidade'))}</td><td class="txt">${esc(p.valor)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 window.addEventListener('resize', () => { if (estado.pac) G.redimensionar($('detalhe')); });

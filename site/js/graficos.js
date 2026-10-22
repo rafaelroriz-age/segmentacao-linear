@@ -160,7 +160,7 @@ function hexA(hex, a) {
   return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
 }
 
-// ── SRE: caminho CROPS (nº de quebras ótimo × β) ─────────────────────────────
+// ── SRE: caminho CROPS (nº de quebras ótimo × penalidade) ────────────────────
 export function grafCrops(el, crops, betaMin, marcas, faixa) {
   const c = cores();
   if (!crops.length || crops.length < 2) return vazio(el, 'Sem caminho CROPS (SRE sem d0 suficiente).');
@@ -172,11 +172,11 @@ export function grafCrops(el, crops, betaMin, marcas, faixa) {
   xs.push(bMax); ys.push(ys[ys.length - 1]);
   const traces = [
     { x: xs, y: ys, mode: 'lines', line: { shape: 'hv', color: c.estrut, width: 2 }, name: 'K ótimo', showlegend: false,
-      hovertemplate: 'β ≥ %{x:.2f}: %{y} quebras<extra></extra>' },
+      hovertemplate: 'penalidade ≥ %{x:.2f}: %{y} quebras<extra></extra>' },
     { x: ord.filter((r) => r.k_quebras > 0).map((r) => r.beta_inf), y: ord.filter((r) => r.k_quebras > 0).map((r) => r.k_quebras), mode: 'markers',
       marker: { color: c.estrut, size: 8, line: { color: c.sup, width: 2 } }, showlegend: false,
       customdata: ord.filter((r) => r.k_quebras > 0).map((r) => [r.beta_sup]),
-      hovertemplate: '%{y} quebras ótimas para β entre %{x:.2f} e %{customdata[0]:.2f}<extra></extra>' },
+      hovertemplate: '%{y} quebras ótimas para penalidade entre %{x:.2f} e %{customdata[0]:.2f}<extra></extra>' },
   ];
   const shapes = [];
   if (faixa) {
@@ -189,7 +189,7 @@ export function grafCrops(el, crops, betaMin, marcas, faixa) {
   });
   return desenhar(el, traces, base(c, {
     shapes, margin: { l: 52, r: 12, t: 40, b: 44 },
-    xaxis: eixo(c, { title: 'penalidade β', range: [betaMin, bMax] }),
+    xaxis: eixo(c, { title: 'penalidade', range: [betaMin, bMax] }),
     yaxis: eixo(c, { title: 'nº de quebras', rangemode: 'tozero' }),
   }));
 }
@@ -259,7 +259,7 @@ export function grafPorTipo(el, linhasPorTipo, fatores, tituloY, opcoes = {}) {
   const ref = fatores.includes(1) ? [{ type: 'line', xref: 'x', yref: 'paper', x0: 1, x1: 1, y0: 0, y1: 1, line: { color: c.destaque, width: 1.5, dash: 'dot' } }] : [];
   return desenhar(el, traces, base(c, {
     shapes: ref, margin: { l: 56, r: 12, t: 40, b: 44 }, hovermode: 'x unified',
-    xaxis: eixoFator(c, fatores, opcoes.tituloX || 'fator sobre β'),
+    xaxis: eixoFator(c, fatores, opcoes.tituloX || 'fator sobre a penalidade de referência'),
     yaxis: eixo(c, { title: tituloY, rangemode: 'tozero', ...(opcoes.yRange ? { range: opcoes.yRange } : {}), ...(opcoes.sufixoEixo ? { ticksuffix: opcoes.sufixoEixo } : {}) }),
   }));
 }
@@ -268,7 +268,7 @@ export function grafPorTipo(el, linhasPorTipo, fatores, tituloY, opcoes = {}) {
 export function grafDiagRede(el, diag, fatores, betaRef, iRef, betaBic) {
   const c = cores();
   const traces = [{ x: diag.map((d) => d.beta), y: diag.map((d) => d.quebras_rede), mode: 'lines', line: { shape: 'hv', color: c.estrut, width: 2 },
-    name: 'quebras na malha', showlegend: false, hovertemplate: 'β %{x:.2f}: %{y:,} quebras<extra></extra>' }];
+    name: 'quebras na malha', showlegend: false, hovertemplate: 'penalidade %{x:.2f}: %{y:,} quebras<extra></extra>' }];
   const shapes = fatores.map((f, i) => ({ type: 'line', xref: 'x', yref: 'paper', x0: betaRef * f, x1: betaRef * f, y0: 0, y1: 1,
     line: { color: corFator(fatores, i, iRef), width: i === iRef ? 2.5 : 1.4 } }));
   fatores.forEach((f, i) => traces.push({ x: [null], y: [null], mode: 'lines', line: { color: corFator(fatores, i, iRef), width: i === iRef ? 3 : 2 },
@@ -279,7 +279,7 @@ export function grafDiagRede(el, diag, fatores, betaRef, iRef, betaBic) {
   }
   return desenhar(el, traces, base(c, {
     shapes, margin: { l: 60, r: 12, t: 70, b: 44 },
-    xaxis: eixo(c, { title: 'penalidade β' }), yaxis: eixo(c, { title: 'quebras na malha', rangemode: 'tozero' }),
+    xaxis: eixo(c, { title: 'penalidade' }), yaxis: eixo(c, { title: 'quebras na malha', rangemode: 'tozero' }),
   }));
 }
 
@@ -299,7 +299,7 @@ export function grafComprimento(el, sensRede, fatores) {
   return desenhar(el, traces, base(c, {
     margin: { l: 56, r: 12, t: 40, b: 44 },
     shapes: [{ type: 'line', xref: 'x', yref: 'paper', x0: 1, x1: 1, y0: 0, y1: 1, line: { color: c.destaque, width: 1.5, dash: 'dot' } }],
-    xaxis: eixoFator(c, fatores, 'fator sobre β'), yaxis: eixo(c, { title: 'comprimento do segmento (km)', rangemode: 'tozero' }),
+    xaxis: eixoFator(c, fatores, 'fator sobre a penalidade de referência'), yaxis: eixo(c, { title: 'comprimento do segmento (km)', rangemode: 'tozero' }),
   }));
 }
 
@@ -326,4 +326,4 @@ export function redimensionar(container) {
   container.querySelectorAll('.js-plotly-plot').forEach((g) => Plotly.Plots.resize(g));
 }
 
-export { NOMES_PARAM, classesDe };
+export { NOMES_PARAM, classesDe, hexA };

@@ -337,6 +337,12 @@ def gravar_site(tabs, meta):
     }
     with open(os.path.join(SAIDA_SITE, 'rede.json'), 'w', encoding='utf-8') as f:
         json.dump(rede, f, ensure_ascii=False, separators=(',', ':'))
+    # mesmo formato de segmentos_rede(p_tipo): segmentos do modelo atual da malha, para o zoom intermediario
+    ref = tabs['segmento'][tabs['segmento']['fator'] == 1.0]
+    for tipo, t in ref.groupby('tipo'):
+        linhas = [limpar([r.sre, r.seg_id, r.km_inicial, r.km_final, r.d0_medio, r.igg_medio, r.iri_medio]) for r in t.itertuples()]
+        with open(os.path.join(SAIDA_SITE, f'segmentos_{tipo}.json'), 'w', encoding='utf-8') as f:
+            json.dump(linhas, f, ensure_ascii=False, separators=(',', ':'))
     por = {k: dict(tuple(tabs[k].groupby('sre', sort=False))) for k in
            ('intervalo', 'segmento', 'cenario', 'auditoria', 'crops', 'sens_fator')}
     sens_sre = tabs['sens_sre'].set_index('sre')
