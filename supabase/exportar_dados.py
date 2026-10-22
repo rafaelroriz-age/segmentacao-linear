@@ -27,6 +27,10 @@ SHAPE_SRE = os.path.join(RAIZ, 'sre-09-2026', 'shape-sres-6aa7eaf5ad9a4.shp')
 SAIDA_DB = os.path.join(AQUI, 'dados')
 SAIDA_SITE = os.path.join(RAIZ, 'site', 'dados-local')
 
+# So entram no modelo e no site os SREs pavimentados: pavimentada, duplicada e em obras de duplicacao.
+# Leito natural, planejada, implantada e em obras de pavimentacao ficam fora (calibracao inclusive).
+SITUACOES = ('PAV', 'DUP', 'EOD')
+
 TOL_GEOM_MAPA = 0.0004      # graus (~40 m): malha inteira no mapa
 TOL_GEOM_DETALHE = 0.00003  # graus (~3 m): SRE selecionado, recortado a cada 200 m
 CASAS_COORD = 5
@@ -54,6 +58,11 @@ def sha256(path):
     return h.hexdigest()
 
 
+def sres_elegiveis():
+    g = gpd.read_file(SHAPE_SRE, columns=['sre', 'situacao'], ignore_geometry=True)
+    return g.loc[g['situacao'].isin(SITUACOES), 'sre'].astype(str).tolist()
+
+
 # ── 1. Roda o modelo a partir do proprio notebook (sem copiar codigo) ─────────
 def rodar_notebook():
     nb = json.load(open(NOTEBOOK, encoding='utf-8'))
@@ -77,11 +86,19 @@ def rodar_notebook():
             alvo = 'os.makedirs(OUTPUT_DIR, exist_ok=True)'
             if alvo not in src:
                 sys.exit('Celula 2 mudou: nao achei a criacao de OUTPUT_DIR')
-            src = src.replace(alvo, f'OUTPUT_DIR = {tmp!r}; GERAR_GRAFICOS = False')
+            # a exportacao precisa dos cenarios de todos os SREs, qualquer que seja SRES_ANALISE no notebook
+            src = src.replace(alvo, f'OUTPUT_DIR = {tmp!r}; GERAR_GRAFICOS = False; SRES_ANALISE = None')
         t0 = time.time()
         log(f'celula {i} ...')
         exec(compile(src, f'<celula {i}>', 'exec'), ns)
         log(f'celula {i} ok ({time.time() - t0:.0f}s)')
+        if i == 3:   # depois da leitura: so os SREs das SITUACOES, antes de qualquer calibracao
+            eleg = set(sres_elegiveis())
+            antes = len(ns['sres'])
+            ns['df'] = ns['df'][ns['df']['sre'].isin(eleg)].reset_index(drop=True)
+            ns['sres'] = [s for s in ns['sres'] if s in eleg]
+            ns['grupos'] = {s: a for s, a in ns['grupos'].items() if s in eleg}
+            log(f'filtro de situacao {SITUACOES}: {len(ns["sres"])} de {antes} SREs, {len(ns["df"])} intervalos')
     shutil.rmtree(tmp, ignore_errors=True)
     if ns['SENS_ALVO'] != 'estrutural':
         log("AVISO: SENS_ALVO != 'estrutural'; o site descreve a sensibilidade do beta estrutural")
@@ -164,6 +181,7 @@ def montar_tabelas(ns):
     # SREs: atributos do shape + medias ponderadas por comprimento (so valores medidos) + classes
     g = gpd.read_file(SHAPE_SRE)
     g['sre'] = g['sre'].astype(str)
+    g = g[g['situacao'].isin(SITUACOES)]
     comp = (intervalo['km_final'] - intervalo['km_inicial']).clip(lower=0)
     medias = {}
     for p, col, ob in (('iri', 'iri', 'iri_obs'), ('igg', 'igg', 'igg_obs'), ('d0', 'd0', 'd0_obs')):
@@ -251,7 +269,7 @@ def montar_tabelas(ns):
         'beta_rede': round(ns['BETA_REDE'], 4), 'beta_min': round(ns['BETA_MIN_EF'], 4),
         'beta_bic': round(ns['BETA_BIC'], 4), 'alpha_km_func': round(ns['ALPHA_KM_FUNC_OPT'], 6),
         'min_size': ns['MIN_SIZE'], 'cv_limite': ns['CV_LIMITE'], 'sens_tol_km': ns['SENS_TOL_KM'],
-        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)),
+        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES),
     }
     meta_df = pd.DataFrame([{'chave': k, 'valor': json.dumps(v)} for k, v in meta.items()])
 

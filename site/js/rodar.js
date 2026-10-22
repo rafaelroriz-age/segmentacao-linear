@@ -4,13 +4,13 @@ import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
 import { Sensibilidade } from './sensibilidade.js';
 import { carregarIntervalos } from './dados.js';
-import { num, km, esc, baixarCsv, criarReferencia, TIPOS } from './util.js';
+import { num, km, esc, baixarCsv, criarReferencia, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
 const LIBS = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   shp: 'https://unpkg.com/shpjs@4.0.4/dist/shp.min.js',
 };
-export const SITUACOES = new Set(['DUP', 'PAV', 'EOD']);
+const SITUACOES = new Set(LISTA_SITUACOES);
 const carregadas = {};
 function carregarLib(nome) {
   carregadas[nome] ||= new Promise((ok, falha) => {

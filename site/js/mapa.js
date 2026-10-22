@@ -4,12 +4,9 @@
 //   perto   → intervalos de 200 m do dataset, dentro dos segmentos homogêneos
 // O SRE selecionado é desenhado por cima com a segmentação escolhida no detalhe (inclusive um passo
 // da análise de sensibilidade).
-import { classificar, criarReferencia, km, num, esc, NOMES_PARAM, UNIDADES } from './util.js';
+import { classificar, criarReferencia, km, num, esc, NOMES_PARAM, UNIDADES, CORES_SITUACAO, NOMES_SITUACAO } from './util.js';
 
-const COR_SRE = ['#d7301f', '#f08c00'];
-const COR_SEM_PAV = '#4a4a48';
-const SEM_PAVIMENTO = new Set(['LEN', 'PLA', 'IMP', 'EOP', 'EOD']);
-const COR_SEG = ['#e8890c', '#2a78d6'];
+const COR_SEG = ['#E8820C', '#2F6FDB'];
 export const ZOOM_SEGMENTOS = 10;
 export const ZOOM_INTERVALOS = 13;
 const MAX_SRES_INTERVALOS = 25;
@@ -48,12 +45,10 @@ export class Mapa {
     this.sres = sres;
     this.porSre = new Map(sres.map((s) => [s.sre, s]));
     this.limites = limites;
-    const ordem = [...sres].sort((a, b) => (a.rodovia || '').localeCompare(b.rodovia || '') || a.km_inicial - b.km_inicial);
-    this.alternada = new Map(ordem.map((s, i) => [s.sre, i % 2]));
     sres.forEach((s) => {
       const ll = s.geom_mapa.map(([x, y]) => [y, x]);
       const linha = L.polyline(ll, { renderer: this.render, weight: 2.4, opacity: 0.95, interactive: true });
-      linha.bindTooltip(`<strong>${esc(s.sre)}</strong> · ${esc(s.rodovia || '')}<br>km ${km(s.km_inicial)} – ${km(s.km_final)}`
+      linha.bindTooltip(`<strong>${esc(s.sre)}</strong> · ${esc(s.rodovia || '')} · ${esc(s.situacao || '')}<br>km ${km(s.km_inicial)} – ${km(s.km_final)}`
         + (s.tem_dados ? `<br>${s.n_seg_combinada ?? '—'} seg. combinados · ${s.n_seg_estrutural ?? '—'} estruturais · ${s.n_seg_funcional ?? '—'} funcionais` : '<br>sem dados no dataset'),
       { sticky: true, className: 'dica-sre', direction: 'top', offset: [0, -6] });
       linha.on('click', () => this.aoSelecionar(s.sre));
@@ -141,7 +136,7 @@ export class Mapa {
   }
 
   corSre(s) {
-    if (this.modo === 'sre') return SEM_PAVIMENTO.has(s.situacao) ? COR_SEM_PAV : COR_SRE[this.alternada.get(s.sre)];
+    if (this.modo === 'sre') return CORES_SITUACAO[s.situacao] || '#6b7280';
     return classificar(this.limites, this.modo, s[`${this.modo}_medio`]).cor;
   }
 
@@ -238,8 +233,7 @@ export class Mapa {
     const partes = [];
     if (this.modo === 'sre') {
       if (nivel === 'sre') {
-        partes.push(`<span><i class="linha" style="background:${COR_SRE[0]}"></i><i class="linha" style="background:${COR_SRE[1]}"></i>SREs (cores alternadas)</span>`,
-          `<span><i class="linha" style="background:${COR_SEM_PAV}"></i>Leito natural, planejada ou em obras</span>`);
+        Object.entries(CORES_SITUACAO).forEach(([k, cor]) => partes.push(`<span><i class="linha" style="background:${cor}"></i>${k} · ${NOMES_SITUACAO[k]}</span>`));
       } else {
         partes.push(`<span><i class="linha" style="background:${COR_SEG[0]}"></i><i class="linha" style="background:${COR_SEG[1]}"></i>Segmentos homogêneos (${NOMES_TIPO[this.tipo]}, cores alternadas)</span>`);
       }

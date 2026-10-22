@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Segmentação Homogênea</title>
 <meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → segmentos homogêneos → intervalos de 200 m), sensibilidade da penalidade por SRE e execução do modelo com dados próprios.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e8890c'/%3E%3Cpath d='M6 24 L13 9 L19 19 L26 7' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='8' fill='%231F5FD1'/%3E%3Cpath d='M7 25 L13 15 L18 20 L27 9' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="css/estilo.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -14,42 +17,68 @@
 </head>
 <body>
 
-<header class="topo">
+<div class="app">
+<aside class="lateral">
   <div class="marca">
     <span class="logo" aria-hidden="true"></span>
     <div>
-      <strong>Segmentação Homogênea</strong>
-      <small>Malha rodoviária — SRE, segmentos homogêneos e intervalos de 200 m</small>
+      <strong>Segmentação</strong>
+      <small>Homogênea · malha</small>
     </div>
   </div>
-  <nav class="abas-topo" role="tablist">
-    <button class="aba-topo ativa" data-pagina="painel" role="tab">Painel da malha</button>
-    <button class="aba-topo" data-pagina="rede" role="tab">Sensibilidade da rede</button>
-    <button class="aba-topo" data-pagina="rodar" role="tab">Rodar o modelo</button>
-    <button class="aba-topo" data-pagina="metodo" role="tab">Metodologia</button>
+  <nav class="abas-topo" aria-label="Seções">
+    <button class="aba-topo ativa" data-pagina="painel" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>Painel da malha</button>
+    <button class="aba-topo" data-pagina="rede" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>Sensibilidade da rede</button>
+    <button class="aba-topo" data-pagina="rodar" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"></path></svg>Rodar o modelo</button>
+    <button class="aba-topo" data-pagina="metodo" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"></path><path d="M9 11h6M9 15h6"></path></svg>Metodologia</button>
   </nav>
-</header>
-
-<div id="aviso-local" class="aviso" hidden>Modo local: dados lidos de <code>site/dados-local/</code>, sem Supabase.</div>
+  <div class="rodape-lat" id="rodape-lat">Modelo v8 · PELT + CROPS</div>
+</aside>
 
 <main id="app">
+  <div id="aviso-local" class="aviso" hidden>Modo local: dados lidos de <code>site/dados-local/</code>, sem Supabase.</div>
   <!-- ── Painel ──────────────────────────────────────────────────────────── -->
   <section class="pagina ativa" id="pagina-painel">
+    <header class="cab-pagina">
+      <div>
+        <span class="sobretitulo">Malha rodoviária estadual · trechos PAV, DUP e EOD</span>
+        <h1>Painel da malha</h1>
+      </div>
+    </header>
+
+    <section class="cartao resumo" aria-label="Resumo da malha">
+      <dl class="resumo-numeros">
+        <div class="resumo-total"><dt>Extensão total</dt><dd class="num grande" id="res-extensao">—</dd><dd class="det" id="res-extensao-det"></dd></div>
+        <div><dt>Intervalos de 200 m</dt><dd class="num" id="res-intervalos">—</dd></div>
+        <div><dt>Regionais</dt><dd class="num" id="res-regionais">—</dd></div>
+      </dl>
+      <div class="resumo-composicao">
+        <h2>Composição da malha por situação</h2>
+        <div class="barra-composicao" id="barra-composicao" role="img"></div>
+        <ul class="legenda-composicao" id="legenda-composicao"></ul>
+        <p class="sub">Só trechos pavimentados (PAV), duplicados (DUP) e em obras de duplicação (EOD) entram no modelo e no painel.</p>
+      </div>
+    </section>
+
     <div class="grade-painel">
       <div class="coluna-esq">
         <article class="cartao">
-          <h2>Parâmetros dos pavimentos</h2>
-          <p class="sub">Extensão da malha por classe (intervalos de 200 m)</p>
+          <h2>Condição dos pavimentos</h2>
+          <p class="sub">% da extensão por classe, em intervalos de 200 m</p>
           <div id="graf-parametros" class="graf graf-parametros"></div>
           <div id="legenda-classes" class="legenda"></div>
         </article>
         <article class="cartao">
           <div class="cab-cartao">
-            <h2>Parâmetros por regional</h2>
-            <div class="chips" id="chips-regional">
-              <button class="chip ativo" data-param="iri">IRI</button>
-              <button class="chip" data-param="d0">DEF</button>
-              <button class="chip" data-param="igg">IGG</button>
+            <h2>Por regional</h2>
+            <div class="segmentado" id="chips-regional" role="group" aria-label="Parâmetro">
+              <button class="chip ativo" data-param="iri" type="button">IRI</button>
+              <button class="chip" data-param="d0" type="button">Deflexão</button>
+              <button class="chip" data-param="igg" type="button">IGG</button>
             </div>
           </div>
           <div class="rolagem"><div id="graf-regional" class="graf"></div></div>
@@ -84,18 +113,18 @@
             </select></label>
           <label class="controle"><span class="rot-controle">Colorir por</span>
             <select id="modo-mapa">
-              <option value="sre">Segmento (cores alternadas)</option>
+              <option value="sre">Situação (SREs) e segmento</option>
               <option value="iri">IRI</option>
               <option value="igg">IGG</option>
               <option value="d0">Deflexão (d0)</option>
             </select></label>
         </div>
-        <div class="niveis" id="niveis-mapa" aria-live="polite">
-          <span class="nivel" data-n="sre">SREs</span><span class="seta">→</span>
-          <span class="nivel" data-n="seg">Segmentos homogêneos</span><span class="seta">→</span>
-          <span class="nivel" data-n="int">Intervalos de 200 m</span>
-          <span class="nivel-texto" id="nivel-texto"></span>
-        </div>
+        <ol class="niveis" id="niveis-mapa" aria-label="Nível do mapa">
+          <li><button class="nivel" data-n="sre" type="button"><strong>1 · SREs</strong><span>zoom até 9</span></button></li>
+          <li><button class="nivel" data-n="seg" type="button"><strong>2 · Segmentos homogêneos</strong><span>zoom 10 a 12</span></button></li>
+          <li><button class="nivel" data-n="int" type="button"><strong>3 · Intervalos de 200 m</strong><span>zoom 13 ou mais</span></button></li>
+        </ol>
+        <p class="nivel-texto" id="nivel-texto" aria-live="polite"></p>
         <div id="mapa" class="mapa"></div>
         <div id="legenda-mapa" class="legenda legenda-mapa"></div>
       </article>
@@ -333,7 +362,7 @@
       <h3>Rodar o modelo com outros dados</h3>
       <p>A aba “Rodar o modelo” roda o mesmo algoritmo no navegador sobre o dataset original da malha (por regional ou lista de SREs) ou sobre uma planilha enviada, com geometria opcional em shapefile ou GeoJSON. Todos os parâmetros podem ser alterados, e cada parâmetro tem uma explicação. Se a planilha trouxer uma segmentação própria, o site compara as fronteiras dela com as do modelo (F1).</p>
       <h3>Fidelidade ao notebook</h3>
-      <p>O código do site (<code>site/js/modelo.js</code>) reproduz o notebook <code>segmentacao_rede_v8_sensibilidade.ipynb</code>. Com os dados exatos, 64.267 de 64.272 segmentações (8 cenários × 3 tipos × 2.678 SREs) saem idênticas; com os valores arredondados do banco, 99,8%. As diferenças restantes são empates numéricos entre duas quebras vizinhas. O teste está em <code>tools/validar_modelo_js.mjs</code>.</p>
+      <p>O código do site (<code>site/js/modelo.js</code>) reproduz o notebook <code>segmentacao_rede_v8_sensibilidade.ipynb</code>. Com os valores do banco (2.152 SREs PAV, DUP e EOD × 8 cenários × 3 tipos), 99,7% a 99,9% das segmentações saem idênticas. As diferenças restantes são empates numéricos entre duas quebras vizinhas. O teste está em <code>tools/validar_modelo_js.mjs</code>.</p>
       <h3>Glossário</h3>
       <dl class="glossario">
         <dt>SRE</dt><dd>Seção Rodoviária de Estudo, unidade básica de gerência.</dd>
@@ -355,6 +384,7 @@
     </article>
   </section>
 </main>
+</div>
 
 <div id="carregando" class="carregando" hidden><span class="spinner"></span><span id="carregando-txt">Carregando…</span></div>
 

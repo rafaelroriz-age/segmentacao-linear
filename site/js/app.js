@@ -3,7 +3,7 @@ import { Mapa } from './mapa.js';
 import * as G from './graficos.js';
 import * as M from './modelo.js';
 import { Sensibilidade } from './sensibilidade.js';
-import { num, km, fatorTxt, esc, TIPOS, residuosPadronizados, baixarCsv } from './util.js';
+import { num, km, fatorTxt, esc, TIPOS, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
 
 const $ = (id) => document.getElementById(id);
 const estado = { rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
@@ -25,6 +25,8 @@ async function iniciar() {
   carregando('Carregando a malha…');
   try {
     estado.rede = await carregarRede();
+    // requisito: só SREs pavimentados (PAV, DUP, EOD) aparecem, mesmo que o banco traga outros
+    estado.rede.sres = estado.rede.sres.filter((s) => SITUACOES.includes(s.situacao));
   } catch (err) {
     return erro(err.message);
   }
@@ -76,7 +78,8 @@ function montarPainel() {
   }));
 
   const ext = sres.reduce((a, s) => a + (s.extensao_km || 0), 0);
-  $('mapa-sub').textContent = `${num(sres.length, 0)} SREs · ${num(ext, 0)} km · ${num(meta.n_intervalos ?? 0, 0)} intervalos de 200 m`;
+  $('mapa-sub').textContent = `${num(sres.length, 0)} SREs · ${num(ext, 0)} km`;
+  montarResumo(sres, ext, meta);
   $('lista-sres').innerHTML = sres.map((s) => `<option value="${esc(s.sre)}">${esc(s.rodovia || '')} · km ${km(s.km_inicial)}–${km(s.km_final)}</option>`).join('');
   $('busca-sre').addEventListener('change', (e) => {
     const v = e.target.value.trim().toUpperCase();
@@ -106,6 +109,24 @@ function montarPainel() {
   }));
   $('det-fechar').addEventListener('click', fecharDetalhe);
   $('metodo-meta').textContent = `Dados gerados em ${meta.gerado_em} a partir de ${meta.entrada} (${meta.notebook}). Penalidade estrutural da rede = ${num(meta.beta_rede, 2)}; α_km funcional = ${num(meta.alpha_km_func, 4)}.`;
+}
+
+function montarResumo(sres, ext, meta) {
+  const comDados = sres.filter((s) => s.tem_dados).length;
+  const nInt = sres.reduce((a, s) => a + (s.n_intervalos || 0), 0);
+  $('res-extensao').textContent = `${num(ext, 0)} km`;
+  $('res-extensao-det').textContent = `${num(sres.length, 0)} SREs (${num(comDados, 0)} com dados) em ${num(new Set(sres.map((s) => s.rodovia)).size, 0)} rodovias`;
+  $('res-intervalos').textContent = num(nInt || meta.n_intervalos || 0, 0);
+  $('res-regionais').textContent = num(new Set(sres.map((s) => s.regional).filter((r) => r !== null)).size, 0);
+  const porSit = SITUACOES.map((k) => {
+    const lst = sres.filter((s) => s.situacao === k);
+    return { k, n: lst.length, km: lst.reduce((a, s) => a + (s.extensao_km || 0), 0) };
+  });
+  const pct = (v) => num((100 * v) / (ext || 1), v / (ext || 1) < 0.01 ? 1 : 0);
+  $('barra-composicao').innerHTML = porSit.map((s) => `<div style="flex:${s.km} 1 0;background:${CORES_SITUACAO[s.k]}"></div>`).join('');
+  $('barra-composicao').setAttribute('aria-label', porSit.map((s) => `${s.k} ${pct(s.km)}%`).join(', '));
+  $('legenda-composicao').innerHTML = porSit.map((s) => `<li><i style="background:${CORES_SITUACAO[s.k]}"></i><strong>${s.k}</strong><em>${NOMES_SITUACAO[s.k]}</em><span>${num(s.km, 0)} km · ${pct(s.km)}% · ${num(s.n, 0)} SREs</span></li>`).join('');
+  $('rodape-lat').textContent = `Modelo v8 · dados de ${String(meta.gerado_em || '').slice(0, 10).split('-').reverse().join('/')}`;
 }
 
 // segmentação do SRE selecionado no mapa: modelo atual do tipo escolhido, ou o passo da sensibilidade
