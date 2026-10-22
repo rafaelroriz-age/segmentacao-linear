@@ -1,5 +1,5 @@
 /* Visual "painel técnico": menu lateral azul-marinho, cartões brancos sobre cinza-azulado,
-   azul como cor de ação, Schibsted Grotesk no texto e Spline Sans Mono nos números. */
+   azul como cor de ação, Sofia Sans Semi Condensed em tudo, com números tabulares. */
 :root {
   color-scheme: light;
   --pagina: #eef1f5;
@@ -29,8 +29,8 @@
   --s-comb: #c2410c;
   --s-d0: #3b4556;
   --raio: 12px;
-  --fonte: 'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --fonte-num: 'Spline Sans Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --fonte: 'Sofia Sans Semi Condensed', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fonte-num: 'Sofia Sans Semi Condensed', system-ui, sans-serif;
   font-family: var(--fonte);
 }
 @media (prefers-color-scheme: dark) {
@@ -92,7 +92,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--pagina); color: var(--texto); font-size: 14px; line-height: 1.5; font-family: var(--fonte); }
+body { background: var(--pagina); color: var(--texto); font-size: 15px; font-variant-numeric: tabular-nums; line-height: 1.5; font-family: var(--fonte); }
 [hidden] { display: none !important; }
 h1, h2, h3 { margin: 0; color: var(--texto); }
 h1 { font-size: 28px; font-weight: 700; line-height: 1.2; }
@@ -100,7 +100,7 @@ h2 { font-size: 16px; font-weight: 600; }
 h3 { font-size: 14px; font-weight: 600; margin-top: 18px; }
 .sub { color: var(--texto-mudo); margin: 2px 0 8px; font-size: 13px; }
 .sobretitulo { color: var(--texto-mudo); font-weight: 600; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; display: block; }
-code { background: var(--superficie-2); padding: 1px 4px; border-radius: 4px; font-size: 12.5px; font-family: var(--fonte-num); }
+code { background: var(--superficie-2); padding: 1px 4px; border-radius: 4px; font-size: 13px; font-family: ui-monospace, Consolas, monospace; }
 .num, .kpi .val, td { font-family: var(--fonte-num); font-variant-numeric: tabular-nums; }
 .sem-caixa { text-transform: none; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

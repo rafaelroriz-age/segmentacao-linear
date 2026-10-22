@@ -144,7 +144,7 @@ function simulador() {
       { x: mx, y: my, mode: 'lines', line: { color: cor, width: 3 }, name: 'média do segmento', hoverinfo: 'skip' },
     ], {
       paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', margin: { l: 44, r: 10, t: 10, b: 36 }, showlegend: false, separators: ',.',
-      font: { family: '"Schibsted Grotesk", system-ui, sans-serif', color: cssVar('--texto'), size: 12 },
+      font: { family: '"Sofia Sans Semi Condensed", system-ui, sans-serif', color: cssVar('--texto'), size: 12 },
       shapes: bk.slice(0, -1).map((b) => ({ type: 'line', x0: b * 0.2, x1: b * 0.2, yref: 'paper', y0: 0, y1: 1, line: { color: cssVar('--s-comb'), width: 2, dash: 'dash' } })),
       xaxis: { title: { text: 'km' }, gridcolor: grade, tickfont: { color: mudo } }, yaxis: { title: { text: 'd0' }, gridcolor: grade, tickfont: { color: mudo } },
     }, { displayModeBar: false, responsive: true });
