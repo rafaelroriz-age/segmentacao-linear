@@ -12,6 +12,7 @@ A string de conexao fica no painel do Supabase (Project Settings > Database). Na
 arquivo do repositorio.
 """
 import io, os, sys, json
+from urllib.parse import urlparse, unquote
 import pandas as pd
 import psycopg2
 
@@ -43,13 +44,22 @@ def preparar(df, tipos):
 
 
 def main():
+    # Tenta ler da variável de ambiente primeiro, depois de um argumento
     url = os.environ.get('SUPABASE_DB_URL')
+    if not url and len(sys.argv) > 1:
+        url = sys.argv[1]
     if not url:
-        sys.exit('Defina SUPABASE_DB_URL (string de conexao do Postgres do projeto).')
+        sys.exit('Uso: python carregar_dados.py "postgresql://postgres:senha@host:5432/postgres"\n'
+                 'Ou defina a variável de ambiente SUPABASE_DB_URL.')
     meta = json.load(open(os.path.join(DADOS, 'meta.json'), encoding='utf-8'))
     print(f"Dados gerados em {meta['gerado_em']} a partir de {meta['entrada']}")
 
-    with psycopg2.connect(url) as con, con.cursor() as cur:
+    # parametros separados em vez da URI: no Windows em portugues a URI completa falha com UnicodeDecodeError
+    u = urlparse(url)
+    conexao = dict(host=u.hostname, port=u.port or 5432, user=unquote(u.username or ''),
+                   password=unquote(u.password or ''), dbname=(u.path or '/postgres').lstrip('/') or 'postgres',
+                   sslmode='require', connect_timeout=15)
+    with psycopg2.connect(**conexao) as con, con.cursor() as cur:
         cur.execute('truncate ' + ', '.join(f'public.{t}' for t in TABELAS))
         for t in TABELAS:
             df = pd.read_parquet(os.path.join(DADOS, f'{t}.parquet'))
