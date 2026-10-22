@@ -3,6 +3,7 @@
 /*
 !/.gitignore
 !/.gitattributes
+!/.mcp.json
 !/README.md
 !/AGENTS.md
 !/DOCUMENTACAO_CODEBASE.md
