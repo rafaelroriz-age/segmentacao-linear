@@ -19,21 +19,24 @@
 
 <div class="app">
 <aside class="lateral">
+  <button class="recolher" id="recolher" type="button" aria-expanded="true" aria-controls="menu-lateral" aria-label="Recolher menu" title="Recolher menu">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+  </button>
   <div class="marca">
     <div>
       <strong>Segmentação</strong>
       <small>Homogênea · malha</small>
     </div>
   </div>
-  <nav class="abas-topo" aria-label="Seções">
-    <button class="aba-topo ativa" data-pagina="painel" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>Painel da malha</button>
-    <button class="aba-topo" data-pagina="rede" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>Sensibilidade</button>
-    <button class="aba-topo" data-pagina="rodar" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"></path></svg>Rodar o modelo</button>
-    <button class="aba-topo" data-pagina="metodo" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"></path><path d="M9 11h6M9 15h6"></path></svg>Metodologia</button>
+  <nav class="abas-topo" id="menu-lateral" aria-label="Seções">
+    <button class="aba-topo ativa" data-pagina="painel" type="button" title="Painel da malha">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg><span class="rot">Painel da malha</span></button>
+    <button class="aba-topo" data-pagina="rede" type="button" title="Sensibilidade">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg><span class="rot">Sensibilidade</span></button>
+    <button class="aba-topo" data-pagina="rodar" type="button" title="Rodar o modelo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"></path></svg><span class="rot">Rodar o modelo</span></button>
+    <button class="aba-topo" data-pagina="metodo" type="button" title="Metodologia">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"></path><path d="M9 11h6M9 15h6"></path></svg><span class="rot">Metodologia</span></button>
   </nav>
   <div class="rodape-lat" id="rodape-lat">Modelo v8 · PELT + CROPS</div>
 </aside>
@@ -124,8 +127,15 @@
           <li><button class="nivel" data-n="int" type="button"><strong>3 · Intervalos de 200 m</strong><span>zoom 13 ou mais</span></button></li>
         </ol>
         <p class="nivel-texto" id="nivel-texto" aria-live="polite"></p>
-        <div id="mapa" class="mapa"></div>
+        <div class="mapa-caixa"><div id="mapa" class="mapa"></div><div class="aviso-zoom" id="aviso-zoom" hidden>Pressione Ctrl e role a tela simultaneamente para aplicar zoom no mapa</div></div>
         <div id="legenda-mapa" class="legenda legenda-mapa"></div>
+        <div class="barra-download" aria-label="Downloads da malha">
+          <span class="rot-controle">Baixar</span>
+          <button class="btn btn-sec" type="button" id="dl-malha-xlsx">Segmentos da malha (Excel)</button>
+          <button class="btn btn-sec" type="button" id="dl-malha-csv">Segmentos (CSV, tipo escolhido)</button>
+          <button class="btn btn-sec" type="button" id="dl-sres-csv">Resumo dos SREs (CSV)</button>
+          <button class="btn btn-sec" type="button" id="dl-cond-png">Gráfico de condição (PNG)</button>
+        </div>
       </article>
     </div>
 
@@ -139,6 +149,12 @@
             <p class="sub" id="det-trecho"></p>
           </div>
           <button class="btn-fechar" id="det-fechar" aria-label="Fechar detalhe">×</button>
+        </div>
+        <div class="barra-download" aria-label="Downloads do SRE">
+          <span class="rot-controle">Baixar</span>
+          <button class="btn" type="button" id="dl-sre-xlsx">Planilha do SRE (Excel)</button>
+          <button class="btn btn-sec" type="button" id="dl-sre-png">Perfil longitudinal (PNG)</button>
+          <button class="btn btn-sec" type="button" id="dl-sre-csv">Segmentos (CSV)</button>
         </div>
         <div class="kpis" id="det-kpis"></div>
         <nav class="abas" role="tablist" id="abas-sre">
@@ -350,6 +366,7 @@
           <button class="aba" data-aba="sens" type="button">Sensibilidade (grade de penalidades)</button>
         </nav>
         <div class="rd-painel painel-aba ativo" id="rd-aba-seg">
+          <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" id="rd-png-sre">Gráfico do SRE (PNG)</button></div>
           <div class="graf" id="rd-graf-sre"></div>
           <div class="explicacao" id="rd-explicacao"></div>
           <h3>Segmentos</h3>

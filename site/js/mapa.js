@@ -23,7 +23,8 @@ export class Mapa {
     this.tipo = 'combinada';    // segmentação mostrada nos níveis médio e perto
     this.camada = 'auto';       // 'auto' (pelo zoom) | 'sre' | 'seg' | 'int'
     this.render = L.canvas({ padding: 0.5, tolerance: 6 });
-    this.map = L.map(elId, { preferCanvas: true, zoomSnap: 0.25 }).setView([-15.9, -49.6], 6.5);
+    this.map = L.map(elId, { preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false }).setView([-15.9, -49.6], 6.5);
+    this.ligarZoomComCtrl(elId);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(this.map);
@@ -39,6 +40,25 @@ export class Mapa {
     this.extra = null;           // camada de geometria enviada pelo usuário
     let t = null;
     this.map.on('zoomend moveend', () => { clearTimeout(t); t = setTimeout(() => this.atualizar(), 120); });
+  }
+
+  // a roda do mouse só dá zoom com Ctrl pressionado; sem Ctrl a página rola e aparece um aviso
+  ligarZoomComCtrl(elId) {
+    const el = document.getElementById(elId);
+    const aviso = document.getElementById('aviso-zoom');
+    let t = null;
+    el.addEventListener('wheel', (ev) => {
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault();
+        const z = this.map.getZoom() + (ev.deltaY < 0 ? 0.5 : -0.5);
+        this.map.setZoomAround(this.map.mouseEventToContainerPoint(ev), Math.min(Math.max(z, this.map.getMinZoom()), this.map.getMaxZoom()));
+        if (aviso) aviso.hidden = true;
+      } else if (aviso) {
+        aviso.hidden = false;
+        clearTimeout(t);
+        t = setTimeout(() => { aviso.hidden = true; }, 1400);
+      }
+    }, { passive: false });
   }
 
   carregarMalha(sres, limites) {

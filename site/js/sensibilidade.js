@@ -4,6 +4,7 @@
 import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
 import { num, esc, baixarCsv, TIPOS } from './util.js';
+import { baixarExcel, baixarPng } from './exportar.js';
 
 const AJUDA = {
   alvo: 'Qual penalidade varia. Estrutural: a penalidade do PELT normal sobre d0 (quanto maior, menos quebras estruturais). Funcional: o quociente α_km do PELT l2 sobre o IGG (penalidade = α_km × extensão). A outra fica no valor do modelo atual.',
@@ -39,12 +40,13 @@ export class Sensibilidade {
       </div>
       <div class="player">
         <button class="btn btn-sec btn-icone" type="button" data-r="ant" aria-label="Passo anterior">◀</button>
-        <input type="range" min="0" max="0" value="0" data-r="slider" aria-label="Passo da grade de penalidades">
+        <div class="livre"><input type="range" min="0" max="1000" step="1" value="0" data-r="slider" aria-label="Penalidade (arraste para mudar o gráfico)"><div class="rot-slider"><span data-r="rot-min"></span><span>arraste: o gráfico muda em tempo real</span><span data-r="rot-max"></span></div></div>
         <button class="btn btn-sec btn-icone" type="button" data-r="prox" aria-label="Próximo passo">▶</button>
         <button class="btn btn-sec" type="button" data-r="play">Reproduzir</button>
         <span class="rot-passo" data-r="rot-passo"></span>
       </div>
       <div class="kpis kpis-compactos" data-r="kpis"></div>
+      <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" data-r="png-passo">Gráfico deste passo (PNG)</button><button class="btn btn-sec" type="button" data-r="png-nseg">Segmentos × penalidade (PNG)</button><button class="btn btn-sec" type="button" data-r="png-faixas">Posição das quebras (PNG)</button><button class="btn btn-sec" type="button" data-r="png-todos">Todos os passos (um PNG por penalidade)</button></div>
       <div class="graf" data-r="graf-passo"></div>
       <div class="explicacao" data-r="explicacao"></div>
       <div class="cab-cartao"><div><h3>Um gráfico por penalidade</h3><p class="sub">Linha azul: média de d0 em cada segmento estrutural; linhas laranja: fronteiras da combinada; verde: quebra nova; cinza: removida. Clique para abrir.</p></div></div>
@@ -55,7 +57,7 @@ export class Sensibilidade {
       </div>
       <details class="detalhes" data-r="det-fusoes"><summary>Detalhes técnicos deste passo (fusões, BIC, resíduos)</summary><div data-r="fusoes"></div><div class="graf graf-baixo" data-r="graf-bic"></div></details>
       <details class="detalhes"><summary>Tabela de todos os passos</summary>
-        <div class="cab-cartao"><span></span><button class="btn btn-sec" type="button" data-r="csv">Baixar CSV</button></div>
+        <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" data-r="csv">Tabela (CSV)</button><button class="btn btn-sec" type="button" data-r="xlsx">Passos (Excel)</button></div>
         <div class="tabela-rolagem" data-r="tabela"></div></details>`;
     this.$('[data-r="alvo"]').addEventListener('click', (e) => {
       const b = e.target.closest('.chip');
@@ -69,7 +71,17 @@ export class Sensibilidade {
     this.$('[data-r="modo"]').addEventListener('change', (e) => { this.modo = e.target.value; this.preencherPadrao(false); this.calcular(); });
     this.$('[data-r="recalc"]').addEventListener('click', () => this.calcular());
     this.$('[data-r="padrao"]').addEventListener('click', () => { this.modo = this.alvo === 'estrutural' ? 'caminho' : 'linear'; this.preencherPadrao(); this.calcular(); });
-    this.$('[data-r="slider"]').addEventListener('input', (e) => this.selecionar(Number(e.target.value)));
+    this.$('[data-r="slider"]').addEventListener('input', (e) => {
+      const v = Number(e.target.value);
+      cancelAnimationFrame(this.quadro);
+      this.quadro = requestAnimationFrame(() => this.livre(this.penDe(v)));
+    });
+    this.$('[data-r="xlsx"]').addEventListener('click', () => baixarExcel(`${this.ctx.sre || 'sre'}_sensibilidade_${this.alvo}`, { PASSOS: this.linhasTabela() }));
+    const nome = (x) => `${this.ctx.sre || 'sre'}_${x}`;
+    this.$('[data-r="png-passo"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-passo"]'), nome(`passo_${this.iSel + 1}_pen_${this.passos[this.iSel].penalidade.toFixed(2)}`)));
+    this.$('[data-r="png-nseg"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-nseg"]'), nome('segmentos_x_penalidade'), { largura: 1200 }));
+    this.$('[data-r="png-faixas"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-faixas"]'), nome('posicao_das_quebras')));
+    this.$('[data-r="png-todos"]').addEventListener('click', () => this.baixarTodos());
     this.$('[data-r="ant"]').addEventListener('click', () => this.selecionar(Math.max(0, this.iSel - 1)));
     this.$('[data-r="prox"]').addEventListener('click', () => this.selecionar(Math.min(this.passos.length - 1, this.iSel + 1)));
     this.$('[data-r="play"]').addEventListener('click', () => this.alternarPlay());
@@ -129,8 +141,10 @@ export class Sensibilidade {
       s.f1 = Object.fromEntries(TIPOS.map((t) => [t, M.f1Quebras(ref[chaveKm(t)], s[chaveKm(t)], tol).f1]));
     });
     this.notaFaixa();
-    const sl = this.$('[data-r="slider"]');
-    sl.max = this.passos.length - 1;
+    const { lo, hi } = this.limites();
+    const fm = (v) => (this.alvo === 'estrutural' ? num(v, 2) : num(v, 4));
+    this.$('[data-r="rot-min"]').textContent = fm(lo);
+    this.$('[data-r="rot-max"]').textContent = fm(hi);
     this.selecionar(this.iRef, true);
     this.resumo();
     this.minis();
@@ -157,28 +171,69 @@ export class Sensibilidade {
     }
   }
 
+  // posição do slider (0–1000) ↔ penalidade, em escala logarítmica quando a grade cobre muitas ordens
+  limites() {
+    const v = this.passos.map((p) => p.penalidade);
+    const lo = Math.min(...v), hi = Math.max(...v);
+    return { lo, hi, log: lo > 0 && hi / lo > 20 };
+  }
+
+  posDe(pen) {
+    const { lo, hi, log } = this.limites();
+    if (hi === lo) return 0;
+    return Math.round(1000 * (log ? Math.log(pen / lo) / Math.log(hi / lo) : (pen - lo) / (hi - lo)));
+  }
+
+  penDe(pos) {
+    const { lo, hi, log } = this.limites();
+    return log ? lo * (hi / lo) ** (pos / 1000) : lo + ((hi - lo) * pos) / 1000;
+  }
+
+  /** penalidade qualquer (slider): refaz a segmentação na hora; o passo "anterior" é o da grade logo abaixo */
+  livre(pen) {
+    if (!this.passos || !this.passos.length) return;
+    const { a, cam, alphaRef, betaRef, p } = this.ctx;
+    const s = M.segmentarSre(a, { alphaFunc: this.alvo === 'funcional' ? pen : alphaRef, beta: this.alvo === 'estrutural' ? pen : betaRef, cam, p });
+    const ref = this.passos[this.iRef];
+    s.penalidade = pen;
+    s.fator = pen / (this.alvo === 'estrutural' ? betaRef : alphaRef);
+    s.f1 = Object.fromEntries(TIPOS.map((t) => [t, M.f1Quebras(ref[chaveKm(t)], s[chaveKm(t)], p.BUFFER_KM).f1]));
+    let iAnt = -1;
+    this.passos.forEach((x, i) => { if (x.penalidade < pen - 1e-9) iAnt = i; });
+    const ant = iAnt >= 0 ? this.passos[iAnt] : null;
+    let iPerto = 0;
+    this.passos.forEach((x, i) => { if (Math.abs(Math.log(x.penalidade / pen)) < Math.abs(Math.log(this.passos[iPerto].penalidade / pen))) iPerto = i; });
+    this.iSel = iPerto;
+    this.mostrar(s, ant, { livre: true, i: iPerto });
+  }
+
   selecionar(i, silencioso = false) {
     if (!this.passos || !this.passos.length) return;
     this.iSel = i;
+    this.$('[data-r="slider"]').value = this.posDe(this.passos[i].penalidade);
+    this.mostrar(this.passos[i], i > 0 ? this.passos[i - 1] : null, { livre: false, i }, silencioso);
+  }
+
+  mostrar(s, ant, { livre, i }, silencioso = false) {
     const { a, cam, sre } = this.ctx;
-    const s = this.passos[i], ant = i > 0 ? this.passos[i - 1] : null;
-    this.$('[data-r="slider"]').value = i;
     const pTxt = this.alvo === 'estrutural' ? num(s.penalidade, 3) : `α_km ${num(s.penalidade, 4)}`;
-    this.$('[data-r="rot-passo"]').innerHTML = `Passo <strong>${i + 1}</strong> de ${this.passos.length} · penalidade ${pTxt} · ${num(s.fator, 2)}x da referência${i === this.iRef ? ' · <strong>referência</strong>' : ''}`;
+    this.$('[data-r="rot-passo"]').innerHTML = livre
+      ? `Penalidade <strong>${pTxt}</strong> · ${num(s.fator, 2)}x da referência · passo mais próximo da grade: ${i + 1} de ${this.passos.length}`
+      : `Passo <strong>${i + 1}</strong> de ${this.passos.length} · penalidade ${pTxt} · ${num(s.fator, 2)}x da referência${i === this.iRef ? ' · <strong>referência</strong>' : ''}`;
     const K = s.estrut_s.length, j = cam ? cam.Ks.indexOf(K) : -1;
-    const igual = i === this.iRef ? 'é o modelo atual' : s.f1.combinada >= 0.999 ? 'mesmas fronteiras do modelo atual' : `${Math.round(100 * s.f1.combinada)}% das fronteiras coincidem com o modelo atual`;
+    const igual = !livre && i === this.iRef ? 'é o modelo atual' : s.f1.combinada >= 0.999 ? 'mesmas fronteiras do modelo atual' : `${Math.round(100 * s.f1.combinada)}% das fronteiras coincidem com o modelo atual`;
     this.$('[data-r="kpis"]').innerHTML = [
       kpi('Penalidade', pTxt, `${num(s.fator, 2)}x a do modelo atual`),
       kpi('Segmentos combinados', s.comb_s.length + 1, igual),
       kpi('Segmentos estruturais (d0)', cam ? K + 1 : '—', j >= 0 ? `mesma solução de ${num(cam.inf[j], 1)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 1) : '∞'}` : ''),
       kpi('Segmentos funcionais (IGG)', s.func_s.length + 1, ''),
     ].join('');
-    GP.grafPasso(this.$('[data-r="graf-passo"]'), a, s, { anterior: ant, alvo: this.alvo, titulo: `SRE ${esc(sre || '')} · passo ${i + 1}/${this.passos.length} · penalidade ${pTxt}` });
+    GP.grafPasso(this.$('[data-r="graf-passo"]'), a, s, { anterior: ant, alvo: this.alvo, titulo: livre ? `SRE ${esc(sre || '')} · penalidade ${pTxt} (arrastando)` : `SRE ${esc(sre || '')} · passo ${i + 1}/${this.passos.length} · penalidade ${pTxt}` });
     const linhas = M.explicarPasso(a, s, ant, cam, this.alvo, this.ctx.p);
     this.$('[data-r="explicacao"]').innerHTML = `<h3>O que aconteceu neste passo</h3><ul>${linhas.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`;
     this.detalhesFusoes(s);
     this.raiz.querySelectorAll('.mini').forEach((m) => m.classList.toggle('sel', Number(m.dataset.i) === i));
-    if (!silencioso) this.resumo();
+    if (!silencioso && !livre) this.resumo();
     this.aoMudarPasso(s, i, this.rotulo(s));
   }
 
@@ -261,6 +316,18 @@ export class Sensibilidade {
 
   baixar() {
     baixarCsv(`${this.ctx.sre || 'sre'}_sensibilidade_${this.alvo}.csv`, this.linhasTabela());
+  }
+
+  async baixarTodos() {
+    const alvo = this.$('[data-r="graf-passo"]');
+    const guardado = this.iSel;
+    for (let i = 0; i < this.passos.length; i++) {
+      this.selecionar(i, true);
+      await new Promise((r) => setTimeout(r, 350));
+      await baixarPng(alvo, `${this.ctx.sre || 'sre'}_passo_${String(i + 1).padStart(2, '0')}_pen_${this.passos[i].penalidade.toFixed(2)}`);
+      await new Promise((r) => setTimeout(r, 450));
+    }
+    this.selecionar(guardado);
   }
 
   alternarPlay() {

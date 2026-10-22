@@ -4,6 +4,7 @@ import * as G from './graficos.js';
 import * as M from './modelo.js';
 import { Sensibilidade } from './sensibilidade.js';
 import { num, km, fatorTxt, esc, TIPOS, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
+import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
 
 const $ = (id) => document.getElementById(id);
 const estado = { rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
@@ -390,4 +391,67 @@ async function analisarSre(sre) {
 
 window.addEventListener('resize', () => { if (estado.pac) G.redimensionar($('detalhe')); });
 
+// menu lateral recolhível (lembra a escolha neste navegador)
+(() => {
+  const app = document.querySelector('.app'), btn = $('recolher');
+  const aplicar = (compacto) => {
+    app.classList.toggle('compacto', compacto);
+    btn.setAttribute('aria-expanded', String(!compacto));
+    btn.title = btn.ariaLabel = compacto ? 'Expandir menu' : 'Recolher menu';
+    setTimeout(() => { estado.mapa?.invalidar(); window.dispatchEvent(new Event('resize')); }, 250);
+  };
+  let guardado = false;
+  try { guardado = localStorage.getItem('menu-compacto') === '1'; } catch { /* sem armazenamento */ }
+  aplicar(guardado);
+  btn.addEventListener('click', () => {
+    const c = !app.classList.contains('compacto');
+    aplicar(c);
+    try { localStorage.setItem('menu-compacto', c ? '1' : '0'); } catch { /* sem armazenamento */ }
+  });
+})();
+
 iniciar().catch((err) => erro(err.message));
+
+// ── downloads (saídas padrão do modelo: planilhas e gráficos) ────────────────
+const aviso = (btn, fn) => btn.addEventListener('click', async () => {
+  const txt = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Gerando…';
+  try { await fn(); } catch (err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = txt; }
+});
+const CAMPOS_SRE = ['sre', 'rodovia', 'classe_via', 'regional', 'situacao', 'jurisdicao', 'trecho', 'inicio', 'fim', 'km_inicial', 'km_final', 'extensao_km', 'tem_dados', 'n_intervalos',
+  'iri_medio', 'igg_medio', 'd0_medio', 'classe_iri', 'classe_igg', 'classe_d0', 'n_seg_funcional', 'n_seg_estrutural', 'n_seg_combinada', 'beta_estrut'];
+const linhasSres = () => estado.rede.sres.map((s) => Object.fromEntries(CAMPOS_SRE.map((k) => [k === 'beta_estrut' ? 'penalidade_estrutural' : k, s[k] ?? null])));
+
+aviso($('dl-sres-csv'), async () => baixarCsv('sres_resumo.csv', linhasSres()));
+aviso($('dl-cond-png'), async () => baixarPng('graf-parametros', 'condicao_dos_pavimentos', { largura: 1400, altura: 520 }));
+aviso($('dl-malha-csv'), async () => {
+  const tipo = $('tipo-mapa').value;
+  const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
+  baixarCsv(`segmentos_${tipo}_malha.csv`, linhasSegmentosRede(await carregarSegmentosRede(tipo), porSre, tipo));
+});
+aviso($('dl-malha-xlsx'), async () => {
+  const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
+  const abas = {};
+  for (const t of TIPOS) abas[t.toUpperCase()] = linhasSegmentosRede(await carregarSegmentosRede(t), porSre, t);
+  abas.SRES = linhasSres();
+  abas.PARAMETROS = estado.rede.parametros.map((p) => ({ parametro: p.parametro, valor: p.valor }));
+  await baixarExcel('segmentacao_malha', abas);
+});
+
+aviso($('dl-sre-xlsx'), async () => {
+  if (!estado.pac) return;
+  await baixarExcel(`${estado.sre}_segmentacao`, abasDoSre(estado.pac, estado.rede.parametros));
+});
+aviso($('dl-sre-csv'), async () => {
+  if (!estado.pac) return;
+  const linhas = linhasTabela(estado.pac).map((s) => ({ sre: estado.sre, tipo: s.tipo, fator: s.fator, ...Object.fromEntries(COLS_SEG.map(([k]) => [k, s[k]])) }));
+  baixarCsv(`${estado.sre}_${estado.tipoTabela}.csv`, linhas);
+});
+aviso($('dl-sre-png'), async () => {
+  if (!estado.pac) return;
+  if (abaAtiva() !== 'modelo') {
+    document.querySelector('#abas-sre [data-aba="modelo"]').click();
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  await baixarPng('graf-perfil', `${estado.sre}_perfil_longitudinal`, { largura: 1600, altura: 1500 });
+});

@@ -3,6 +3,7 @@
 import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
 import { Sensibilidade } from './sensibilidade.js';
+import { baixarPng } from './exportar.js';
 import { carregarIntervalos } from './dados.js';
 import { num, km, esc, baixarCsv, criarReferencia, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
@@ -104,6 +105,7 @@ export class Rodar {
     this.$('rd-tipo-mapa').addEventListener('change', () => this.desenharMapa());
     this.$('rd-csv').addEventListener('click', () => this.baixarResultado('csv'));
     this.$('rd-xlsx').addEventListener('click', () => this.baixarResultado('xlsx'));
+    this.$('rd-png-sre').addEventListener('click', () => baixarPng(this.$('rd-graf-sre'), `${this.sreAtual || 'sre'}_segmentacao`, { largura: 1600, altura: 1100 }));
     this.raiz.querySelectorAll('#rd-abas .aba').forEach((b) => b.addEventListener('click', () => {
       this.raiz.querySelectorAll('#rd-abas .aba').forEach((x) => x.classList.toggle('ativa', x === b));
       this.raiz.querySelectorAll('.rd-painel').forEach((pn) => pn.classList.toggle('ativo', pn.id === `rd-aba-${b.dataset.aba}`));
