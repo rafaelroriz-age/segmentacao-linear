@@ -26,12 +26,43 @@ export async function baixarExcel(arquivo, abas) {
   XLSX.writeFile(wb, arquivo.endsWith('.xlsx') ? arquivo : `${arquivo}.xlsx`);
 }
 
-/** gráfico Plotly → PNG em alta resolução */
-export function baixarPng(el, nome, { largura = 1600, altura = null } = {}) {
+// cores do tema claro (iguais às de css/estilo.css): o PNG sai sempre claro, como o gráfico é mostrado no tema padrão
+const CLARO = { '--texto': '#141b26', '--texto-2': '#2d3748', '--texto-mudo': '#4a5568', '--grade': '#e4e8ee', '--eixo': '#c5cdd9', '--superficie': '#ffffff',
+  '--destaque': '#1f5fd1', '--s-func': '#6b7280', '--s-estrut': '#1f5fd1', '--s-comb': '#c2410c', '--s-d0': '#3b4556' };
+const rgb = (hex) => { const h = hex.replace('#', ''); return h.length === 6 ? [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) : null; };
+
+/** troca as cores do tema atual (claro ou escuro) pelas do tema claro, no JSON do gráfico */
+function paraClaro(json) {
+  const css = getComputedStyle(document.documentElement);
+  for (const [nome, claro] of Object.entries(CLARO)) {
+    const atual = css.getPropertyValue(nome).trim().toLowerCase();
+    if (!atual || atual === claro) continue;
+    json = json.split(atual).join(claro).split(atual.toUpperCase()).join(claro);
+    const a = rgb(atual), c = rgb(claro);
+    if (a && c) json = json.split(`rgba(${a.join(',')},`).join(`rgba(${c.join(',')},`);
+  }
+  return json;
+}
+
+/** gráfico Plotly → PNG claro (fundo branco, texto escuro) em alta resolução */
+export async function baixarPng(el, nome, { largura = 1600, altura = null } = {}) {
   const alvo = typeof el === 'string' ? document.getElementById(el) : el;
-  if (!alvo || !alvo.data) return Promise.reject(new Error('Gráfico ainda não desenhado.'));
-  const h = altura || Math.max(420, Math.round(alvo.getBoundingClientRect().height * (largura / Math.max(alvo.getBoundingClientRect().width, 1))));
-  return Plotly.downloadImage(alvo, { format: 'png', filename: nome, width: largura, height: h, scale: 2 });
+  if (!alvo || !alvo.data) throw new Error('Gráfico ainda não desenhado.');
+  const r = alvo.getBoundingClientRect();
+  const h = altura || Math.max(420, Math.round(r.height * (largura / Math.max(r.width, 1))));
+  const copia = JSON.parse(paraClaro(JSON.stringify({ data: alvo.data, layout: alvo.layout })));
+  copia.layout = { ...copia.layout, width: largura, height: h, autosize: false, paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff' };
+  delete copia.layout.template;
+  const tmp = Object.assign(document.createElement('div'), {});
+  tmp.style.cssText = `position:fixed;left:-99999px;top:0;width:${largura}px;height:${h}px`;
+  document.body.appendChild(tmp);
+  try {
+    await Plotly.newPlot(tmp, copia.data, copia.layout, { staticPlot: true, displayModeBar: false });
+    await Plotly.downloadImage(tmp, { format: 'png', filename: nome, width: largura, height: h, scale: 2 });
+  } finally {
+    Plotly.purge(tmp);
+    tmp.remove();
+  }
 }
 
 const lim = (v) => (v === undefined ? null : v);
