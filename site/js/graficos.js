@@ -36,7 +36,7 @@ function eixo(c, extra = {}) {
 function base(c, extra = {}) {
   return {
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { family: '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: c.texto, size: 12 },
+    font: { family: '"Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: c.texto, size: 12 },
     margin: { l: 56, r: 16, t: 16, b: 44 },
     hoverlabel: { bgcolor: c.sup, bordercolor: c.eixo, font: { color: c.texto } },
     legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: { color: c.texto2, size: 12 }, bgcolor: 'rgba(0,0,0,0)' },
