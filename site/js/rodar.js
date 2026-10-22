@@ -10,6 +10,7 @@ const LIBS = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   shp: 'https://unpkg.com/shpjs@4.0.4/dist/shp.min.js',
 };
+export const SITUACOES = new Set(['DUP', 'PAV', 'EOD']);
 const carregadas = {};
 function carregarLib(nome) {
   carregadas[nome] ||= new Promise((ok, falha) => {
@@ -146,7 +147,8 @@ export class Rodar {
   sresSelecionados() {
     const reg = this.$('rd-regional').value;
     const lista = this.$('rd-lista').value.toUpperCase().split(/[\s,;]+/).filter(Boolean);
-    const todos = this.ctx.rede.sres.filter((s) => s.tem_dados);
+    // dataset original: só trechos DUP, PAV e EOD (os demais são leito natural, planejada, em obras etc.)
+    const todos = this.ctx.rede.sres.filter((s) => s.tem_dados && SITUACOES.has(s.situacao));
     let sel = [];
     if (reg === 'todas') sel = todos.map((s) => s.sre);
     else if (reg) sel = todos.filter((s) => String(s.regional) === reg).map((s) => s.sre);
@@ -176,7 +178,7 @@ export class Rodar {
       sel.forEach((s) => { if (r.intervalos[s]?.length) grupos[s] = M.arraysDoBanco(r.intervalos[s]); });
       this.definirDataset(grupos, {}, `dataset original da malha · ${Object.keys(grupos).length} SREs`);
       this.status('rd-status-orig', `${linhas.length.toLocaleString('pt-BR')} intervalos de ${Object.keys(grupos).length} SREs prontos para rodar.`
-        + (invalidos.length ? ` Ignorados (sem dados ou inexistentes): ${esc(invalidos.join(', '))}.` : ''));
+        + (invalidos.length ? ` Ignorados (sem dados, situação diferente de DUP/PAV/EOD ou inexistentes): ${esc(invalidos.join(', '))}.` : ''));
     } catch (err) {
       this.status('rd-status-orig', `Erro ao ler o banco: ${esc(err.message)}`, true);
     }
