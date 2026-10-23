@@ -8,8 +8,8 @@ import { carregarIntervalos } from './dados.js';
 import { num, km, esc, baixarCsv, criarReferencia, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
 const LIBS = {
-  xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  shp: 'https://unpkg.com/shpjs@4.0.4/dist/shp.min.js',
+  xlsx: new URL('../vendor/xlsx.full.min.js', import.meta.url).href,
+  shp: new URL('../vendor/shp.min.js', import.meta.url).href,
 };
 const SITUACOES = new Set(LISTA_SITUACOES);
 const carregadas = {};

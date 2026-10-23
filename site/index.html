@@ -9,11 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Semi+Condensed:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="css/estilo.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="https://cdn.jsdelivr.net/npm/plotly.js-cartesian-dist-min@2.35.2/plotly-cartesian.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/plotly-cartesian.min.js"></script>
+<script src="vendor/supabase.min.js"></script>
 </head>
 <body>
 
@@ -42,6 +42,12 @@
 </aside>
 
 <main id="app">
+  <section id="diagnostico" class="cartao diag" role="alert" hidden>
+    <h2>Não foi possível carregar os dados</h2>
+    <p class="sub" id="diag-resumo"></p>
+    <ul id="diag-lista"></ul>
+    <p class="sub">Se o problema continuar, envie esta mensagem (ou um print) a quem mantém o site. <button class="btn btn-sec" type="button" id="diag-recarregar">Tentar de novo</button></p>
+  </section>
   <div id="aviso-local" class="aviso" hidden>Modo local: dados lidos de <code>site/dados-local/</code>, sem Supabase.</div>
   <!-- ── Painel ──────────────────────────────────────────────────────────── -->
   <section class="pagina ativa" id="pagina-painel">

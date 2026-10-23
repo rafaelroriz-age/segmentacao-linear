@@ -2,7 +2,7 @@
 // COMBINADA, AUDITORIA, CENARIOS_SRE e PARAMETROS, e os gráficos em PNG.
 import { baixarCsv } from './util.js';
 
-const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const XLSX_URL = new URL('../vendor/xlsx.full.min.js', import.meta.url).href;
 let carga = null;
 export function carregarXlsx() {
   if (window.XLSX) return Promise.resolve();

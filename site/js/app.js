@@ -1,3 +1,4 @@
+import { CONFIG } from './config.js';
 import { modoLocal, carregarRede, carregarSre, carregarSegmentosRede, carregarIntervalos } from './dados.js';
 import { Mapa } from './mapa.js';
 import * as G from './graficos.js';
@@ -18,8 +19,29 @@ function carregando(txt) {
 
 function erro(msg) {
   carregando(null);
-  alert(msg);
+  diagnosticar(msg);
 }
+
+// painel de diagnóstico: mostra o que falhou (rede, banco ou bibliotecas) em vez de uma tela vazia
+async function diagnosticar(msg) {
+  $('diagnostico').hidden = false;
+  $('diag-resumo').textContent = String(msg || 'Erro desconhecido');
+  const lista = $('diag-lista');
+  lista.innerHTML = '<li>Verificando a conexão…</li>';
+  const testes = [];
+  testes.push(['Bibliotecas do site (mapa, gráficos, banco)', Promise.resolve(window.L && window.Plotly && window.supabase)]);
+  const url = CONFIG.SUPABASE_URL;
+  testes.push([`Banco de dados (${url ? new URL(url).host : 'não configurado'})`, url
+    ? fetch(`${url}/rest/v1/rpc/segmentos_rede`, { method: 'POST', headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_tipo: 'combinada' }) }).then((r) => r.ok)
+    : Promise.resolve(false)]);
+  testes.push(['Mapa base (tile.openstreetmap.org)', new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = 'https://tile.openstreetmap.org/0/0/0.png'; setTimeout(() => ok(false), 8000); })]);
+  const res = await Promise.all(testes.map(([n, p]) => p.then((v) => [n, !!v]).catch(() => [n, false])));
+  lista.innerHTML = res.map(([n, ok]) => `<li class="${ok ? 'ok' : 'falha'}">${ok ? '✓' : '✕'} ${esc(n)} — ${ok ? 'acessível' : 'sem acesso'}</li>`).join('')
+    + (res.some(([, ok]) => !ok) ? '<li>Itens com ✕ costumam ser bloqueio de rede, proxy ou firewall da empresa para esse endereço. Tente de outra rede (por exemplo, o celular) ou peça liberação ao TI.</li>' : '<li>Tudo acessível: recarregue com Ctrl+F5 para descartar arquivos antigos do navegador.</li>');
+}
+$('diag-recarregar').addEventListener('click', () => location.reload());
+window.addEventListener('error', (e) => { if (!estado.rede) diagnosticar(e.message); });
+window.addEventListener('unhandledrejection', (e) => { if (!estado.rede) diagnosticar(e.reason?.message || e.reason); });
 
 async function iniciar() {
   if (modoLocal) $('aviso-local').hidden = false;
