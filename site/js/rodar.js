@@ -38,8 +38,8 @@ const COLUNAS = [
 const PARAMS = [
   ['Segmentos', [
     ['MIN_SIZE', 'Mínimo de intervalos por segmento', 'int', 'O PELT não cria segmentos com menos intervalos que isso. 3 × 200 m = 600 m, o piso operacional.', 2, 20],
-    ['MIN_COMP_COMB_KM', 'Comprimento mínimo do segmento (km)', 'num', 'Funcional + estrutural: uma fronteira só entra se deixar pelo menos este comprimento dos dois lados. SRE menor que isso fica com 1 segmento.', 0.2, 10],
-    ['MAX_COMP_KM', 'Comprimento máximo do segmento (km)', 'num', 'Segmentos maiores que isso são divididos em partes iguais.', 1, 100],
+    ['MIN_COMP_COMB_KM', 'Comprimento mínimo do segmento (km)', 'num', 'Todos os segmentos (funcional, estrutural e resultado): uma fronteira só entra se deixar pelo menos este comprimento dos dois lados. SRE menor que isso fica com 1 segmento.', 0.2, 10],
+    ['MAX_COMP_KM', 'Comprimento máximo do segmento (km)', 'num', 'Todos os segmentos: os maiores que isso são divididos em partes iguais.', 1, 100],
     ['BUFFER_KM', 'Distância de coincidência (km)', 'num', 'Uma fronteira funcional a menos desta distância de uma estrutural é a mesma fronteira (fica na posição estrutural).', 0, 3],
   ]],
   ['Funcional (IGG)', [

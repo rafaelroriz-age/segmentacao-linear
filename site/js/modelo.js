@@ -23,7 +23,7 @@ export const PADRAO = {
   ALPHA_TESTE: 0.05,
   SUBSEGMENTAR_COMB: false,
   BUFFER_KM: 0.4,
-  MIN_COMP_COMB_KM: 1.0,  // segmento do resultado: mínimo 1 km (SRE com menos de 1 km = 1 segmento)
+  MIN_COMP_COMB_KM: 1.0,  // todo segmento (funcional, estrutural e resultado): mínimo 1 km (SRE com menos de 1 km = 1 segmento)
   MAX_COMP_KM: 20,        // e máximo 20 km (trechos maiores são divididos em partes iguais)
   CV_LIMITE: 1.0,
   N_LAGS_ACF: 20,
@@ -350,12 +350,9 @@ export function segmentarEstruturalTrecho(y, lo, hi, beta, piso, p = PADRAO, mod
   return bk.slice(0, -1).map((b) => lo + b);
 }
 
-/** funcional + estrutural: fronteiras estruturais + funcionais que não caem a até BUFFER_KM de uma estrutural
- *  (as coincidentes ficam na posição estrutural); depois mínimo MIN_COMP_COMB_KM e máximo MAX_COMP_KM por segmento.
- *  Mesma regra de supabase/exportar_dados.py (reconciliar_uniao). */
-export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO) {
-  const fronteiras = [...subKm];
-  for (const fk of funcKm) if (!subKm.some((sk) => Math.abs(fk - sk) <= p.BUFFER_KM)) fronteiras.push(fk);
+/** regra espacial: mínimo MIN_COMP_COMB_KM e máximo MAX_COMP_KM por segmento, sobre fronteiras em km.
+ *  Mesma regra de supabase/exportar_dados.py (regra_espacial). */
+export function regraEspacial(fronteiras, kmMin, kmMax, p = PADRAO) {
   const ord = [...new Set(fronteiras)].sort((x, y) => x - y);
   const limpas = [];
   let ultimo = kmMin;
@@ -372,6 +369,21 @@ export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO) {
     if (L > max + eps) { const n = Math.ceil(L / max - eps); for (let j = 1; j < n; j++) out.push(lim[i] + (j * L) / n); }
   }
   return out;
+}
+
+/** regraEspacial sobre quebras em índices (1º intervalo do segmento seguinte) */
+function regraEspacialIdx(quebras, ini, kmMin, kmMax, p) {
+  const N = ini.length;
+  return [...new Set(regraEspacial(quebras.map((s) => ini[s]), kmMin, kmMax, p).map((k) => searchsorted(ini, k)))].filter((s) => s > 0 && s < N).sort((x, y) => x - y);
+}
+
+/** funcional + estrutural: fronteiras estruturais + funcionais que não caem a até BUFFER_KM de uma estrutural
+ *  (as coincidentes ficam na posição estrutural); depois a regra espacial.
+ *  Mesma regra de supabase/exportar_dados.py (reconciliar_uniao). */
+export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO) {
+  const fronteiras = [...subKm];
+  for (const fk of funcKm) if (!subKm.some((sk) => Math.abs(fk - sk) <= p.BUFFER_KM)) fronteiras.push(fk);
+  return regraEspacial(fronteiras, kmMin, kmMax, p);
 }
 
 function searchsorted(arr, v) {
@@ -506,6 +518,10 @@ export function segmentarSre(a, { alphaFunc, beta, cam, p = PADRAO, auditar = tr
   if (temD0) estrutS = cam.bkps[kOtimo(cam, beta)].slice(0, -1).map(Number);
   const nEstrutBruto = estrutS.length;
   if (p.FUNDIR_ESTRUT && temD0) estrutS = fundirTestes(estrutS, [[teste, true]], N, p.ALPHA_TESTE, fusoes.estrutural);
+
+  // regra espacial (mínimo e máximo por segmento) também na funcional e na estrutural
+  funcS = regraEspacialIdx(funcS, ini, kmMin, kmMax, p);
+  estrutS = regraEspacialIdx(estrutS, ini, kmMin, kmMax, p);
 
   // combinada em 2 etapas
   let subS = estrutS;

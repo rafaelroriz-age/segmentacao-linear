@@ -66,19 +66,14 @@ def sha256(path):
     return h.hexdigest()
 
 
-MIN_COMP_KM = 1.0    # segmento do resultado: minimo 1 km (SRE menor que isso = 1 segmento)
+MIN_COMP_KM = 1.0    # todo segmento (funcional, estrutural e resultado): minimo 1 km (SRE menor que isso = 1 segmento)
 MAX_COMP_KM = 20.0   # e maximo 20 km (trechos maiores sao divididos em partes iguais)
 
 
-def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buffer_km=0.4):
-    """Funcional + estrutural: fronteiras estruturais + funcionais a mais de buffer_km de uma estrutural;
-    depois minimo e maximo por segmento. Mesma regra de site/js/modelo.js (reconciliarCombinada)."""
+def regra_espacial(fronteiras, km_min, km_max):
+    """Minimo e maximo por segmento sobre fronteiras em km. Mesma regra de site/js/modelo.js (regraEspacial)."""
     import math
     eps = 1e-9
-    fronteiras = list(sub_km_raw)
-    for fk in func_km:
-        if not any(abs(fk - sk) <= buffer_km for sk in sub_km_raw):
-            fronteiras.append(fk)
     limpas, ultimo = [], km_min
     for f in sorted(set(fronteiras)):
         if f - ultimo >= MIN_COMP_KM - eps and km_max - f >= MIN_COMP_KM - eps:
@@ -93,6 +88,23 @@ def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buf
             n = math.ceil(L / MAX_COMP_KM - eps)
             out += [lim[i] + j * L / n for j in range(1, n)]
     return out
+
+
+def regra_espacial_idx(quebras, ini, km_min, km_max):
+    """regra_espacial sobre quebras em indices (1o intervalo do segmento seguinte)."""
+    km = regra_espacial([float(ini[s]) for s in quebras], km_min, km_max)
+    N = len(ini)
+    return sorted({int(i) for i in np.searchsorted(ini, km) if 0 < i < N})
+
+
+def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buffer_km=0.4):
+    """Funcional + estrutural: fronteiras estruturais + funcionais a mais de buffer_km de uma estrutural;
+    depois minimo e maximo por segmento. Mesma regra de site/js/modelo.js (reconciliarCombinada)."""
+    fronteiras = list(sub_km_raw)
+    for fk in func_km:
+        if not any(abs(fk - sk) <= buffer_km for sk in sub_km_raw):
+            fronteiras.append(fk)
+    return regra_espacial(fronteiras, km_min, km_max)
 
 
 def sres_elegiveis():
@@ -125,11 +137,18 @@ def rodar_notebook():
                 sys.exit('Celula 2 mudou: nao achei a criacao de OUTPUT_DIR')
             # a exportacao precisa dos cenarios de todos os SREs, qualquer que seja SRES_ANALISE no notebook
             src = src.replace(alvo, f'OUTPUT_DIR = {tmp!r}; GERAR_GRAFICOS = False; SRES_ANALISE = None')
+        if i == 6:   # regra espacial (min. 1 km, max. 20 km) tambem nas segmentacoes funcional e estrutural
+            alvo = '    # Combinada (2 etapas)'
+            if alvo not in src:
+                sys.exit('Celula 6 mudou: nao achei o inicio da combinada em segmentar_sre')
+            src = src.replace(alvo, '    func_s = regra_espacial_idx(func_s, ini, km_min, km_max)\n'
+                                    '    estrut_s = regra_espacial_idx(estrut_s, ini, km_min, km_max)\n' + alvo)
+            ns['regra_espacial_idx'] = regra_espacial_idx
         t0 = time.time()
         log(f'celula {i} ...')
         exec(compile(src, f'<celula {i}>', 'exec'), ns)
         log(f'celula {i} ok ({time.time() - t0:.0f}s)')
-        if i == 6:   # resultado "funcional + estrutural": uniao das fronteiras, min. 1 km, max. 20 km
+        if i == 6:   # resultado "funcional + estrutural": uniao das fronteiras, min. 1 km, max. 20 km (como os demais)
             ns.update(SUBSEGMENTAR_COMB=False, FUNDIR_COMB=False, MIN_COMP_COMB_KM=MIN_COMP_KM, reconciliar_combinada=reconciliar_uniao)
             log(f'resultado = uniao funcional + estrutural (min {MIN_COMP_KM} km, max {MAX_COMP_KM} km)')
         if i == 3:   # depois da leitura: so os SREs das SITUACOES, antes de qualquer calibracao

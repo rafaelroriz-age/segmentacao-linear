@@ -558,8 +558,9 @@
       <ul>
         <li><strong>Funcional</strong> — PELT <code>l2</code> sobre o IGG padronizado (mudança de nível). Penalidade = α_km × extensão, com faixa de ±50% escolhida pelo BIC; vizinhos sem diferença de média (Welch) são fundidos.</li>
         <li><strong>Estrutural</strong> — PELT <code>normal</code> (média e variância por segmento) sobre o d0, como em Biswas &amp; Kuna (2022). A penalidade da rede é o cotovelo da curva “quebras na malha × penalidade”.</li>
-        <li><strong>Funcional + estrutural</strong> — o resultado final junta as fronteiras das duas segmentações; fronteiras a até 0,4 km uma da outra contam como uma só (na posição estrutural). Cada segmento tem no mínimo 1 km e no máximo 20 km; trechos maiores são divididos em partes iguais e SREs com menos de 1 km ficam com um segmento.</li>
+        <li><strong>Funcional + estrutural</strong> — o resultado final junta as fronteiras das duas segmentações; fronteiras a até 0,4 km uma da outra contam como uma só (na posição estrutural).</li>
       </ul>
+      <p><strong>Regra espacial</strong> — vale para as três segmentações: cada segmento tem no mínimo 1 km e no máximo 20 km. Trechos maiores são divididos em partes iguais e SREs com menos de 1 km ficam com um segmento.</p>
       <h3>O que a penalidade faz</h3>
       <p>O PELT minimiza <code>custo do ajuste + penalidade × nº de quebras</code>. Uma quebra só entra se reduzir o custo mais do que a penalidade: penalidade baixa gera muitos segmentos curtos; alta, poucos e longos.</p>
       <h3>Fidelidade e dados</h3>
