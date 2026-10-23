@@ -11,13 +11,16 @@ Mostrar em gráficos separados primeiramente a segmentação funcional feita, e 
 
 MODELO:
     O usuário seleciona qual parâmetro estrutural, D0, RAIO, DIFERENÇA ACUMULADA; essa mudança pede para que o hiperparametro 'model' do pelt possa ser alterado, faça isso concluído
-    A análise de sensibilidade (e rodar o modelo) deve funcionar como um sandbox, com testes de penalidade modelo e atributo 
- 
+    A análise de sensibilidade (e rodar o modelo) deve funcionar como um sandbox, com testes de penalidade modelo e atributo
+    Rodar o modelo deve dar o opção de usar o que já está sendo utilizado ou utilizar os seus próprios dados, e pode mesclar (por exemplo: shp que já está disponível no site e um novo dataset) 
+        Idente linhas (verticais) de cores iguais, mas em gráficos diferentes, e junte elas no terceiro gráfico
+    Crie um 3 gráfico, que une os segmentos funcionais e estruturais, esse gráfico terá o eixo y duplicado (igg e d0)
+        Rodar o modelo deve dar o opção de usar o que já está sendo utilizado ou utilizar os seus próprios dados, e pode mesclar (por exemplo: shp que já está disponível no site e um novo dataset)
 Gráficos:
 
     Estão muito poluídos, separá-los ou até mesmo outra ideia para deixar menos poluído
     Diminua as linhas, elas atrapalham a visualização concluído
-    Idente linhas (verticais) de cores iguais, mas em gráficos diferentes 
-    Crie um 3 gráfico, que une os segmentos funcionais e estruturais, esse gráfico tera o eixo y duplicado (igg e d0)
+    Idente linhas (verticais) de cores iguais, mas em gráficos diferentes, e junte elas no terceiro gráfico
+    Crie um 3 gráfico, que une os segmentos funcionais e estruturais, esse gráfico terá o eixo y duplicado (igg e d0)
 
 Organização:

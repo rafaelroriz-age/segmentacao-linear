@@ -33,6 +33,8 @@
   --fonte: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fonte-num: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --fonte-mat: 'STIX Two Math', 'Cambria Math', 'Latin Modern Math', math, serif;
+  --dur: .15s;
+  --ease: ease-in-out;
   font-family: var(--fonte);
 }
 @media (prefers-color-scheme: dark) {
@@ -115,7 +117,7 @@ a { color: var(--destaque-texto); }
 .marca strong { letter-spacing: -.01em; }
 .marca strong { display: block; color: #fff; font-size: 15px; }
 .marca small { display: block; color: var(--lateral-mudo); font-size: 12px; }
-.abas-topo { display: flex; flex-direction: column; gap: 4px; }
+.abas-topo { display: flex; flex-direction: column; gap: 8px; }
 .aba-topo { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--raio); background: none; color: var(--lateral-texto); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .aba-topo svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .aba-topo:hover { background: var(--marinho-3); color: #fff; }
@@ -201,7 +203,7 @@ td.interp { color: var(--texto-mudo); }
 .cartao-mapa { display: flex; flex-direction: column; gap: 12px; }
 .mapa { flex: 1; min-height: 600px; border-radius: var(--raio); border: 1px solid var(--borda); z-index: 0; }
 .mapa-medio { min-height: 420px; flex: none; height: 420px; }
-.niveis { list-style: none; margin: 0; padding: 4px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--pagina); border-radius: var(--raio); }
+.niveis { list-style: none; margin: 0; padding: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; background: var(--pagina); border-radius: var(--raio); }
 .nivel { width: 100%; min-height: 48px; border: 0; border-radius: var(--raio); background: transparent; color: var(--texto-2); font: inherit; text-align: left; padding: 6px 12px; display: flex; flex-direction: column; cursor: pointer; }
 .nivel strong { font-size: 13px; font-weight: 600; }
 .nivel span { font-size: 12px; color: var(--texto-mudo); }
@@ -227,7 +229,7 @@ td.interp { color: var(--texto-mudo); }
 /* faixa de telemetria: uma barra contínua dividida por linhas de 1 px (o fundo da faixa é a cor da
    borda e aparece só no vão de 1 px entre as células, inclusive quando a faixa quebra em linhas) */
 .kpis { display: flex; flex-wrap: wrap; gap: 1px; margin: 16px 0; background: var(--borda); border: 1px solid var(--borda); border-radius: var(--raio-p); overflow: hidden; }
-.kpi { flex: 1 1 150px; min-width: 0; background: var(--superficie-2); padding: 7px 12px 8px; }
+.kpi { flex: 1 1 150px; min-width: 0; background: var(--superficie-2); padding: 10px 12px; }
 .kpi .rot { color: var(--texto-mudo); font-size: 10.5px; font-weight: 600; font-family: var(--fonte); text-transform: uppercase; letter-spacing: .07em; }
 .kpi .val { font-size: 19px; font-weight: 500; color: var(--texto); line-height: 1.3; letter-spacing: -.01em; }
 .kpi .det { color: var(--texto-mudo); font-size: 11.5px; font-family: var(--fonte-num); }
@@ -434,3 +436,17 @@ tr.ref td { background: var(--destaque-suave); }
 /* ── verificação de paridade Python ↔ JS ── */
 .paridade-saida { margin-top: 12px; }
 td.difere { color: var(--erro); }
+
+/* Transições de interação (cor/borda/fundo apenas; sem deslocamento nem sombra) */
+.btn, .btn-sec, .btn-fechar, .aba-topo, .aba, .chip, .nivel, .mini, .sugestao, .indice a, .recolher, .clicavel td, .ref td,
+select, input, textarea {
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), filter var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.btn-fechar:hover { background: var(--superficie-2); border-color: var(--destaque); color: var(--destaque-texto); }
+select:hover, input:hover, textarea:hover { border-color: var(--texto-mudo); }
+select:focus, input:focus, textarea:focus { border-color: var(--destaque); }
+.btn:active { filter: brightness(.94); }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .btn-sec, .btn-fechar, .aba-topo, .aba, .chip, .nivel, .mini, .sugestao, .indice a, .recolher, .clicavel td, .ref td,
+  select, input, textarea, .lateral, .recolher svg { transition: none; }
+}
