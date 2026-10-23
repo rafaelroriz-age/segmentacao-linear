@@ -11,7 +11,7 @@ export const ZOOM_SEGMENTOS = 10;
 export const ZOOM_INTERVALOS = 13;
 const MAX_SRES_INTERVALOS = 25;
 const NOMES_NIVEL = { sre: 'SREs', seg: 'segmentos homogêneos', int: 'intervalos de 200 m' };
-const NOMES_TIPO = { combinada: 'combinada', estrutural: 'estrutural', funcional: 'funcional' };
+const NOMES_TIPO = { combinada: 'funcional + estrutural', estrutural: 'estrutural', funcional: 'funcional' };
 
 export class Mapa {
   /** fontes: { segmentos(tipo) → Promise<[...]>, intervalos(sres) → Promise<{intervalos, geom}> } */
@@ -95,7 +95,7 @@ export class Mapa {
       const ll = s.geom_mapa.map(([x, y]) => [y, x]);
       const linha = L.polyline(ll, { renderer: this.render, weight: 2.4, opacity: 0.95, interactive: true });
       linha.bindTooltip(`<strong>${esc(s.sre)}</strong> · ${esc(s.rodovia || '')} · ${esc(s.situacao || '')}<br>km ${km(s.km_inicial)} – ${km(s.km_final)}`
-        + (s.tem_dados ? `<br>${s.n_seg_combinada ?? '—'} seg. combinados · ${s.n_seg_estrutural ?? '—'} estruturais · ${s.n_seg_funcional ?? '—'} funcionais` : '<br>sem dados no dataset'),
+        + (s.tem_dados ? `<br>${s.n_seg_combinada ?? '—'} seg. funcional + estrutural · ${s.n_seg_estrutural ?? '—'} estruturais · ${s.n_seg_funcional ?? '—'} funcionais` : '<br>sem dados no dataset'),
       { sticky: true, className: 'dica-sre', direction: 'top', offset: [0, -6] });
       linha.on('click', () => this.aoSelecionar(s.sre));
       linha.addTo(this.camadaMalha);

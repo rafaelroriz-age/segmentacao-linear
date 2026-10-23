@@ -38,9 +38,9 @@ const COLUNAS = [
 const PARAMS = [
   ['Segmentos', [
     ['MIN_SIZE', 'Mínimo de intervalos por segmento', 'int', 'O PELT não cria segmentos com menos intervalos que isso. 3 × 200 m = 600 m, o piso operacional.', 2, 20],
-    ['MIN_COMP_COMB_KM', 'Comprimento mínimo da combinada (km)', 'num', 'Na combinada, uma fronteira só entra se deixar pelo menos este comprimento dos dois lados.', 0, 5],
-    ['BUFFER_KM', 'Absorção de quebra funcional (km)', 'num', 'Uma quebra funcional a menos desta distância de uma estrutural é absorvida por ela, evitando segmentos minúsculos entre as duas.', 0, 3],
-    ['SUBSEGMENTAR_COMB', 'Combinada em 2 etapas', 'bool', 'Liga: cada base funcional é subsegmentada pelo PELT estrutural com a mesma penalidade. Desliga: a combinada junta as quebras estruturais e funcionais.'],
+    ['MIN_COMP_COMB_KM', 'Comprimento mínimo do segmento (km)', 'num', 'Funcional + estrutural: uma fronteira só entra se deixar pelo menos este comprimento dos dois lados. SRE menor que isso fica com 1 segmento.', 0.2, 10],
+    ['MAX_COMP_KM', 'Comprimento máximo do segmento (km)', 'num', 'Segmentos maiores que isso são divididos em partes iguais.', 1, 100],
+    ['BUFFER_KM', 'Distância de coincidência (km)', 'num', 'Uma fronteira funcional a menos desta distância de uma estrutural é a mesma fronteira (fica na posição estrutural).', 0, 3],
   ]],
   ['Funcional (IGG)', [
     ['MARGEM_PEN', 'Margem da penalidade funcional', 'num', 'A penalidade do PELT l2 é α_km × extensão; o modelo testa a faixa ±margem em torno dela e fica com a de menor BIC.', 0, 0.95],
@@ -52,7 +52,6 @@ const PARAMS = [
   ['Fusões e testes', [
     ['FUNDIR_FUNC', 'Fundir funcionais iguais (Welch)', 'bool', 'Remove a quebra funcional se a média do IGG dos dois lados não difere (teste de Welch).'],
     ['FUNDIR_ESTRUT', 'Fundir estruturais iguais', 'bool', 'Remove a quebra estrutural se nem a média (Welch) nem a variância (Brown-Forsythe) do d0 diferem. Desligado na v8, como em Biswas & Kuna.'],
-    ['FUNDIR_COMB', 'Fundir combinados iguais', 'bool', 'Remove a quebra da combinada se não há diferença em d0 (média e variância) nem em IGG (média).'],
     ['ALPHA_TESTE', 'Nível de significância', 'num', 'Um par de segmentos só fica separado se algum teste der p ≤ este valor. Também é o nível da auditoria dos resíduos.', 0.001, 0.5],
     ['CV_LIMITE', 'CV máximo para “coerente”', 'num', 'Um segmento é marcado como coerente se o coeficiente de variação de d0, IGG e IRI não passa deste valor.', 0.05, 5],
   ]],
@@ -394,7 +393,7 @@ export class Rodar {
     const kpi = (r, v, d) => `<div class="kpi"><div class="rot">${r}</div><div class="val">${v}</div><div class="det">${d}</div></div>`;
     this.$('rd-kpis').innerHTML = [
       kpi('SREs', sres.length, `${num(ext, 1)} km · ${num(res.segundos, 1)} s no navegador`),
-      kpi('Segmentos combinados', tot('combinada'), `mediana ${num(medianaComp(res, 'combinada'), 2)} km`),
+      kpi('Funcional + estrutural', tot('combinada'), `mediana ${num(medianaComp(res, 'combinada'), 2)} km`),
       kpi('Segmentos estruturais', tot('estrutural'), `mediana ${num(medianaComp(res, 'estrutural'), 2)} km`),
       kpi('Segmentos funcionais', tot('funcional'), `mediana ${num(medianaComp(res, 'funcional'), 2)} km`),
       kpi('Penalidade estrutural <span class="sem-caixa">β</span>', this.cfg.modoBeta === 'sre' ? 'por SRE' : num(res.betaBase, 2), nomesBeta[this.cfg.modoBeta]),
@@ -406,7 +405,7 @@ export class Rodar {
     const usuarioN = Object.keys(this.usuario || {}).length;
     if (usuarioN) {
       const f1 = sres.filter((s) => this.usuario[s]).map((s) => M.f1Quebras(this.usuario[s], res.porSre[s].r.comb_km, res.p.BUFFER_KM).f1);
-      nota.push(`Sua segmentação × combinada do modelo: F1 médio ${num(f1.reduce((a, b) => a + b, 0) / Math.max(f1.length, 1), 2)} (tolerância ${num(res.p.BUFFER_KM, 1)} km) em ${f1.length} SREs.`);
+      nota.push(`Sua segmentação × funcional + estrutural do modelo: F1 médio ${num(f1.reduce((a, b) => a + b, 0) / Math.max(f1.length, 1), 2)} (tolerância ${num(res.p.BUFFER_KM, 1)} km) em ${f1.length} SREs.`);
     }
     this.$('rd-nota-res').textContent = nota.join(' ');
     if (res.diag) {
@@ -455,7 +454,7 @@ export class Rodar {
     this.$('rd-tit-estrut').textContent = q.cam ? `· ${M.SINAIS_ESTRUT[cfg.estrut]} · PELT ${cfg.modelo} · penalidade ${num(q.beta, 2)} · ${r.estrut_s.length + 1} segmentos` : '· sem dados suficientes';
     GS.grafSinal(this.$('rd-graf-func'), a, cfg.func, r.func_s, { cor: '#7c3aed', altura: 260 });
     const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
-    GS.grafSinal(this.$('rd-graf-estrut'), a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280 });
+    GS.grafSinal(this.$('rd-graf-estrut'), a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280, outras: r.func_s });
     GS.grafUnido(this.$('rd-graf-unido'), a, r);
     GS.grafRegua(this.$('rd-graf-regua'), a, r, limites);
     let ins = GS.insights(a, r, limites, { sre: s });

@@ -32,7 +32,7 @@ export function robustez(quebrasKm, passosKm, tol = 0.4) {
 }
 
 /** um sinal com a segmentação. modo 'media' (média ± desvio) ou 'reta' (reta ajustada, para a ACA) */
-export function grafSinal(el, a, chave, quebras, { titulo = '', modo = 'media', cor = null, rob = null, altura = 300, serie = null } = {}) {
+export function grafSinal(el, a, chave, quebras, { titulo = '', modo = 'media', cor = null, rob = null, altura = 300, serie = null, outras = null, corOutras = '#7c3aed' } = {}) {
   const c = tema();
   const y = serie || a[chave];
   const x = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
@@ -41,6 +41,8 @@ export function grafSinal(el, a, chave, quebras, { titulo = '', modo = 'media', 
   const shapes = segs.map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1, fillcolor: i % 2 ? hexA(cr, 0.07) : 'rgba(0,0,0,0)', line: { width: 0 }, layer: 'below' }));
   // fronteiras: linha vertical fina na cor do gráfico (a mesma cor aparece no gráfico unido)
   quebras.forEach((b) => shapes.push({ type: 'line', xref: 'x', yref: 'paper', x0: a.ini[b], x1: a.ini[b], y0: 0, y1: 1, line: { color: cr, width: 1.2, dash: 'dot' }, opacity: 0.8 }));
+  // fronteiras de outra segmentação (as funcionais no gráfico estrutural), só como referência
+  (outras || []).forEach((b) => shapes.push({ type: 'line', xref: 'x', yref: 'paper', x0: a.ini[b], x1: a.ini[b], y0: 0, y1: 1, line: { color: corOutras, width: 1.2, dash: 'dot' }, opacity: 0.8 }));
   const mx = [], my = [], cd = [], bx = [], by = [];
   segs.forEach((s, i) => {
     const v = y.slice(s.lo, s.hi).filter(Number.isFinite);
@@ -61,6 +63,7 @@ export function grafSinal(el, a, chave, quebras, { titulo = '', modo = 'media', 
   const un = UN[chave] ?? '', cs = CASAS[chave] ?? 1;
   const traces = [];
   if (bx.length) traces.push({ x: bx, y: by, fill: 'toself', fillcolor: hexA(cr, 0.12), line: { width: 0 }, mode: 'lines', hoverinfo: 'skip', showlegend: false });
+  if (outras && outras.length) traces.push({ x: [null], y: [null], mode: 'lines', name: 'fronteira funcional', line: { color: corOutras, dash: 'dot', width: 1.5 }, hoverinfo: 'skip' });
   traces.push({ x, y, mode: 'lines', line: { color: c.sinal, width: 0.9 }, opacity: 0.75, name: 'a cada 200 m', hovertemplate: `km %{x:.2f}: %{y:.${cs}f}${un}<extra></extra>` });
   traces.push({ x: mx, y: my, mode: 'lines', line: { color: cr, width: 3 }, customdata: cd, name: modo === 'reta' ? 'tendência do segmento' : 'média do segmento',
     hovertemplate: modo === 'reta' ? 'segmento %{customdata[0]}<br>%{customdata[2]:.2f} km<extra></extra>' : `segmento %{customdata[0]}: média %{y:.${cs}f}${un}<br>desvio %{customdata[1]:.${cs}f} · %{customdata[2]:.2f} km<extra></extra>` });
@@ -94,7 +97,7 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const coinc = [], soF = [], soE = [...kmE];
   kmF.forEach((k) => {
     const j = soE.findIndex((e) => Math.abs(e - k) <= tol);
-    if (j >= 0) { coinc.push((k + soE[j]) / 2); soE.splice(j, 1); } else soF.push(k);
+    if (j >= 0) { coinc.push(soE[j]); soE.splice(j, 1); } else soF.push(k);   // fica na posição estrutural, como no resultado
   });
   const medias = (serie, quebras) => {
     const mx = [], my = [];
@@ -136,7 +139,7 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
 // classe de um valor; o raio não tem tabela de classes: usa a do d0 do mesmo trecho
 const classeDe = (limites, param, v) => classificar(limites, param, v);
 
-/** linhas da régua: segmentos funcionais, estruturais e o resultado (combinada) com a classe limitante */
+/** linhas da régua: segmentos funcionais, estruturais e o resultado (funcional + estrutural) com a classe limitante */
 export function tabelaRegua(a, r, limites) {
   const cfg = r.cfg;
   const pf = cfg.func;   // igg ou iri têm classes
@@ -157,7 +160,7 @@ export function grafRegua(el, a, r, limites, { titulo = '' } = {}) {
   const c = tema();
   const t = tabelaRegua(a, r, limites);
   const cfg = r.cfg;
-  const rotF = `Funcional (${SINAIS_FUNC[cfg.func]})`, rotE = 'Estrutural (classe pelo D0)', rotC = 'Resultado (combinada)';
+  const rotF = `Funcional (${SINAIS_FUNC[cfg.func]})`, rotE = 'Estrutural (classe pelo D0)', rotC = 'Funcional + estrutural';
   const traco = (lst, rot, campo) => ({
     type: 'bar', orientation: 'h', y: lst.map(() => rot), x: lst.map((s) => s.ext), base: lst.map((s) => s.k0),
     marker: { color: lst.map((s) => s[campo].cor), line: { color: c.sup, width: 2 } },
@@ -185,7 +188,7 @@ export function insights(a, r, limites, { robE = null, robF = null, sre = '' } =
   const qe = r.estrut_km, qf = r.func_km;
   const coinc = qe.length ? qe.filter((k) => qf.some((f) => Math.abs(f - k) <= 0.4)).length / qe.length : null;
   const frases = [];
-  frases.push(`<strong>${t.combinada.length} segmentos</strong> no resultado (${t.funcional.length} funcionais por ${SINAIS_FUNC[cfg.func]}, ${t.estrutural.length} estruturais por ${SINAIS_ESTRUT[cfg.estrut]}).`);
+  frases.push(`<strong>${t.combinada.length} segmentos</strong> em funcional + estrutural (${t.funcional.length} funcionais por ${SINAIS_FUNC[cfg.func]}, ${t.estrutural.length} estruturais por ${SINAIS_ESTRUT[cfg.estrut]}).`);
   if (robE && qe.length) {
     let j = 0; robE.forEach((v, i) => { if ((v ?? -1) > (robE[j] ?? -1)) j = i; });
     let w = 0; robE.forEach((v, i) => { if ((v ?? 2) < (robE[w] ?? 2)) w = i; });

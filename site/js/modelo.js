@@ -19,11 +19,12 @@ export const PADRAO = {
   N_MIN_COTOVELO_SRE: 4,
   FUNDIR_FUNC: true,
   FUNDIR_ESTRUT: false,
-  FUNDIR_COMB: true,
+  FUNDIR_COMB: false,     // funcional + estrutural: união pura das fronteiras, sem fusão por testes
   ALPHA_TESTE: 0.05,
-  SUBSEGMENTAR_COMB: true,
+  SUBSEGMENTAR_COMB: false,
   BUFFER_KM: 0.4,
-  MIN_COMP_COMB_KM: 0.6,
+  MIN_COMP_COMB_KM: 1.0,  // segmento do resultado: mínimo 1 km (SRE com menos de 1 km = 1 segmento)
+  MAX_COMP_KM: 20,        // e máximo 20 km (trechos maiores são divididos em partes iguais)
   CV_LIMITE: 1.0,
   N_LAGS_ACF: 20,
   N_MIN_AUDITORIA: 8,
@@ -349,16 +350,28 @@ export function segmentarEstruturalTrecho(y, lo, hi, beta, piso, p = PADRAO, mod
   return bk.slice(0, -1).map((b) => lo + b);
 }
 
+/** funcional + estrutural: fronteiras estruturais + funcionais que não caem a até BUFFER_KM de uma estrutural
+ *  (as coincidentes ficam na posição estrutural); depois mínimo MIN_COMP_COMB_KM e máximo MAX_COMP_KM por segmento.
+ *  Mesma regra de supabase/exportar_dados.py (reconciliar_uniao). */
 export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO) {
   const fronteiras = [...subKm];
   for (const fk of funcKm) if (!subKm.some((sk) => Math.abs(fk - sk) <= p.BUFFER_KM)) fronteiras.push(fk);
   const ord = [...new Set(fronteiras)].sort((x, y) => x - y);
   const limpas = [];
   let ultimo = kmMin;
+  const eps = 1e-9;
   for (const f of ord) {
-    if (f - ultimo >= p.MIN_COMP_COMB_KM && kmMax - f >= p.MIN_COMP_COMB_KM) { limpas.push(f); ultimo = f; }
+    if (f - ultimo >= p.MIN_COMP_COMB_KM - eps && kmMax - f >= p.MIN_COMP_COMB_KM - eps) { limpas.push(f); ultimo = f; }
   }
-  return limpas;
+  const max = p.MAX_COMP_KM;
+  if (!(max > 0)) return limpas;
+  const lim = [kmMin, ...limpas, kmMax], out = [];
+  for (let i = 0; i < lim.length - 1; i++) {
+    if (i > 0) out.push(lim[i]);
+    const L = lim[i + 1] - lim[i];
+    if (L > max + eps) { const n = Math.ceil(L / max - eps); for (let j = 1; j < n; j++) out.push(lim[i] + (j * L) / n); }
+  }
+  return out;
 }
 
 function searchsorted(arr, v) {
@@ -503,7 +516,7 @@ export function segmentarSre(a, { alphaFunc, beta, cam, p = PADRAO, auditar = tr
   }
   const funcKm = funcS.map((s) => ini[s]);
   const combKm = reconciliarCombinada(funcKm, subS.map((s) => ini[s]), kmMin, kmMax, p);
-  let combS = combKm.map((k) => searchsorted(ini, k));
+  let combS = [...new Set(combKm.map((k) => searchsorted(ini, k)))].filter((s) => s > 0 && s < N);
   const nCombBruto = combS.length;
   if (p.FUNDIR_COMB) {
     const series = [...(temD0 ? [[teste, true]] : []), ...(temIgg ? [[sFunc, false]] : [])];

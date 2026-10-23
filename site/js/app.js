@@ -231,7 +231,7 @@ function cabecalho(pac) {
   const c = cenario(pac, 1);
   $('det-kpis').innerHTML = [
     kpi('Extensão', `${num(s.extensao_km, 2)} km`, `${s.n_intervalos} intervalos de 200 m`),
-    kpi('Segmentos combinados', s.n_seg_combinada ?? '—', 'modelo atual'),
+    kpi('Funcional + estrutural', s.n_seg_combinada ?? '—', 'segmentos, modelo atual'),
     kpi('Segmentos estruturais', s.n_seg_estrutural ?? '—', c && c.beta_estrut !== null ? `penalidade ${num(c.beta_estrut, 2)}` : 'sem d0'),
     kpi('Segmentos funcionais', s.n_seg_funcional ?? '—', c && c.pen_func !== null ? `penalidade ${num(c.pen_func, 2)}` : 'sem IGG'),
     kpi('d0 médio', num(s.d0_medio, 1), `${s.classe_d0} · 0,01 mm`),
@@ -260,7 +260,7 @@ function desenharModelo(pac) {
   const meta = estado.rede.meta;
   const c = cenario(pac, 1) || {};
   const origem = { rede: 'penalidade da rede (cotovelo)', cotovelo_sre: 'cotovelo do próprio SRE', fallback_rede: 'penalidade da rede', sem_d0: 'sem d0' }[c.origem_beta] || c.origem_beta;
-  $('nota-modelo').innerHTML = `Modelo atual: funcional <strong>${c.quebras_func + 1}</strong> · estrutural <strong>${c.quebras_estrut + 1}</strong> · combinada <strong>${c.quebras_comb + 1}</strong> segmentos. `
+  $('nota-modelo').innerHTML = `Modelo atual: funcional <strong>${c.quebras_func + 1}</strong> · estrutural <strong>${c.quebras_estrut + 1}</strong> · funcional + estrutural <strong>${c.quebras_comb + 1}</strong> segmentos. `
     + (c.beta_estrut !== null && c.beta_estrut !== undefined ? `Penalidade estrutural = ${num(c.beta_estrut, 2)} (${esc(origem)}). ` : 'Sem d0 suficiente para a segmentação estrutural. ')
     + `d0 medido em ${num(100 * (c.frac_d0_medido || 0), 0)}% dos intervalos.`;
   desenharEtapasModelo(pac);
@@ -296,14 +296,14 @@ function desenharEtapasModelo(pac) {
   $('tit-estrut-modelo').textContent = cam ? `· ${M.SINAIS_ESTRUT[cfg.estrut]} · PELT ${cfg.modelo} · penalidade ${num(ctx.betaRef, 2)} · ${r.estrut_s.length + 1} segmentos` : '· sem dados suficientes';
   GS.grafSinal('graf-func-modelo', a, cfg.func, r.func_s, { cor: '#7c3aed', altura: 260 });
   const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
-  GS.grafSinal('graf-estrut-modelo', a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280 });
+  GS.grafSinal('graf-estrut-modelo', a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280, outras: r.func_s });
   GS.grafUnido('graf-unido-modelo', a, r);
   GS.grafRegua('graf-regua-modelo', a, r, limites);
   ['graf-func-modelo', 'graf-estrut-modelo', 'graf-unido-modelo', 'graf-regua-modelo'].forEach((id) => estado.mira.ligar(id));
   $('insights-modelo').innerHTML = GS.insights(a, r, limites, { sre: estado.sre });
   if (!M.ehPadrao(cfg)) {
     $('nota-modelo').innerHTML = `Parâmetros escolhidos: funcional <strong>${M.SINAIS_FUNC[cfg.func]}</strong>, estrutural <strong>${M.SINAIS_ESTRUT[cfg.estrut]}</strong> (PELT ${cfg.modelo}). `
-      + `Resultado: ${r.func_s.length + 1} funcionais · ${r.estrut_s.length + 1} estruturais · ${r.comb_s.length + 1} combinados. O mapa e as planilhas continuam mostrando o modelo padrão (IGG + D0).`;
+      + `Resultado: ${r.func_s.length + 1} funcionais · ${r.estrut_s.length + 1} estruturais · ${r.comb_s.length + 1} funcional + estrutural. O mapa e as planilhas continuam mostrando o modelo padrão (IGG + D0).`;
   }
 }
 

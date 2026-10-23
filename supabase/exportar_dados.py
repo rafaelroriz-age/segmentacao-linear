@@ -66,6 +66,35 @@ def sha256(path):
     return h.hexdigest()
 
 
+MIN_COMP_KM = 1.0    # segmento do resultado: minimo 1 km (SRE menor que isso = 1 segmento)
+MAX_COMP_KM = 20.0   # e maximo 20 km (trechos maiores sao divididos em partes iguais)
+
+
+def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buffer_km=0.4):
+    """Funcional + estrutural: fronteiras estruturais + funcionais a mais de buffer_km de uma estrutural;
+    depois minimo e maximo por segmento. Mesma regra de site/js/modelo.js (reconciliarCombinada)."""
+    import math
+    eps = 1e-9
+    fronteiras = list(sub_km_raw)
+    for fk in func_km:
+        if not any(abs(fk - sk) <= buffer_km for sk in sub_km_raw):
+            fronteiras.append(fk)
+    limpas, ultimo = [], km_min
+    for f in sorted(set(fronteiras)):
+        if f - ultimo >= MIN_COMP_KM - eps and km_max - f >= MIN_COMP_KM - eps:
+            limpas.append(f)
+            ultimo = f
+    lim, out = [km_min] + limpas + [km_max], []
+    for i in range(len(lim) - 1):
+        if i > 0:
+            out.append(lim[i])
+        L = lim[i + 1] - lim[i]
+        if L > MAX_COMP_KM + eps:
+            n = math.ceil(L / MAX_COMP_KM - eps)
+            out += [lim[i] + j * L / n for j in range(1, n)]
+    return out
+
+
 def sres_elegiveis():
     g = gpd.read_file(SHAPE_SRE, columns=['sre', 'situacao', 'jurisdicao', 'principal'], ignore_geometry=True)
     return g.loc[filtro_malha(g), 'sre'].astype(str).tolist()
@@ -100,6 +129,9 @@ def rodar_notebook():
         log(f'celula {i} ...')
         exec(compile(src, f'<celula {i}>', 'exec'), ns)
         log(f'celula {i} ok ({time.time() - t0:.0f}s)')
+        if i == 6:   # resultado "funcional + estrutural": uniao das fronteiras, min. 1 km, max. 20 km
+            ns.update(SUBSEGMENTAR_COMB=False, FUNDIR_COMB=False, MIN_COMP_COMB_KM=MIN_COMP_KM, reconciliar_combinada=reconciliar_uniao)
+            log(f'resultado = uniao funcional + estrutural (min {MIN_COMP_KM} km, max {MAX_COMP_KM} km)')
         if i == 3:   # depois da leitura: so os SREs das SITUACOES, antes de qualquer calibracao
             eleg = set(sres_elegiveis())
             antes = len(ns['sres'])
@@ -287,7 +319,7 @@ def montar_tabelas(ns):
         'beta_rede': round(ns['BETA_REDE'], 4), 'beta_min': round(ns['BETA_MIN_EF'], 4),
         'beta_bic': round(ns['BETA_BIC'], 4), 'alpha_km_func': round(ns['ALPHA_KM_FUNC_OPT'], 6),
         'min_size': ns['MIN_SIZE'], 'cv_limite': ns['CV_LIMITE'], 'sens_tol_km': ns['SENS_TOL_KM'],
-        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES), 'jurisdicao': JURISDICAO, 'principal': PRINCIPAL,
+        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES), 'min_comp_km': MIN_COMP_KM, 'max_comp_km': MAX_COMP_KM, 'jurisdicao': JURISDICAO, 'principal': PRINCIPAL,
     }
     meta_df = pd.DataFrame([{'chave': k, 'valor': json.dumps(v)} for k, v in meta.items()])
 

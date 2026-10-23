@@ -238,7 +238,7 @@ export class Sensibilidade {
     const igual = !livre && i === this.iRef ? 'é o modelo atual' : s.f1.combinada >= 0.999 ? 'mesmas fronteiras do modelo atual' : `${Math.round(100 * s.f1.combinada)}% das fronteiras coincidem com o modelo atual`;
     this.$('[data-r="kpis"]').innerHTML = [
       kpi('Penalidade', pTxt, `${num(s.fator, 2)}x a do modelo atual`),
-      kpi('Segmentos combinados', s.comb_s.length + 1, igual),
+      kpi('Funcional + estrutural', s.comb_s.length + 1, igual),
       kpi(`Segmentos funcionais (${M.SINAIS_FUNC[cfg.func]})`, s.func_s.length + 1, ''),
       kpi(`Segmentos estruturais (${M.SINAIS_ESTRUT[cfg.estrut]})`, cam ? K + 1 : '—', j >= 0 ? `mesma solução de ${num(cam.inf[j], 1)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 1) : '∞'}` : ''),
     ].join('');
@@ -260,21 +260,21 @@ export class Sensibilidade {
     this.$('[data-r="tit-estrut"]').textContent = `· ${M.SINAIS_ESTRUT[cfg.estrut]} · PELT ${cfg.modelo} · ${s.estrut_s.length + 1} segmentos`;
     GS.grafSinal(this.$('[data-r="graf-func"]'), a, cfg.func, s.func_s, { cor: '#7c3aed', rob: this.alvo === 'funcional' ? robF : null, altura: 260 });
     const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
-    GS.grafSinal(this.$('[data-r="graf-estrut"]'), a, cfg.estrut, s.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', rob: robE, altura: 280 });
+    GS.grafSinal(this.$('[data-r="graf-estrut"]'), a, cfg.estrut, s.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', rob: robE, altura: 280, outras: s.func_s });
     GS.grafUnido(this.$('[data-r="graf-unido"]'), a, s);
     GS.grafRegua(this.$('[data-r="graf-regua"]'), a, s, limites);
     this.$('[data-r="insights"]').innerHTML = GS.insights(a, s, limites, { robE, robF, sre });
   }
 
   rotulo(s) {
-    return this.alvo === 'estrutural' ? `combinada, penalidade ${num(s.penalidade, 2)}` : `combinada, α_km ${num(s.penalidade, 4)}`;
+    return this.alvo === 'estrutural' ? `funcional + estrutural, penalidade ${num(s.penalidade, 2)}` : `funcional + estrutural, α_km ${num(s.penalidade, 4)}`;
   }
 
   detalhesFusoes(s) {
     const { a } = this.ctx;
     const { cfg } = this.ctx;
     const f = M.SINAIS_FUNC[cfg.func], e = cfg.estrut === 'raio' ? 'raio' : 'd0';
-    const nomes = { funcional: `Funcional (Welch no ${f})`, estrutural: `Estrutural (Welch + Brown-Forsythe no ${e})`, combinada: `Combinada (${e}: média e variância; ${f}: média)` };
+    const nomes = { funcional: `Funcional (Welch no ${f})`, estrutural: `Estrutural (Welch + Brown-Forsythe no ${e})`, combinada: `Funcional + estrutural (${e}: média e variância; ${f}: média)` };
     const blocos = TIPOS.map((t) => {
       const f = s.fusoes[t];
       if (!f.length) return `<p><strong>${nomes[t]}:</strong> nenhuma fusão${t === 'estrutural' && !this.ctx.p.FUNDIR_ESTRUT ? ' (desligada no modelo, como em Biswas & Kuna)' : ''}.</p>`;

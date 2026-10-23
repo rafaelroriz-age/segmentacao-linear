@@ -115,7 +115,7 @@
             </select></label>
           <label class="controle"><span class="rot-controle">Segmentação</span>
             <select id="tipo-mapa">
-              <option value="combinada">Combinada (2 etapas)</option>
+              <option value="combinada">Funcional + estrutural</option>
               <option value="estrutural">Estrutural (d0)</option>
               <option value="funcional">Funcional (IGG)</option>
             </select></label>
@@ -202,7 +202,7 @@
         <div class="painel-aba" id="aba-tabelas">
           <div class="cab-cartao">
             <div class="chips" id="chips-tipo">
-              <button class="chip ativo" data-tipo="combinada">Combinada</button>
+              <button class="chip ativo" data-tipo="combinada">Funcional + estrutural</button>
               <button class="chip" data-tipo="estrutural">Estrutural</button>
               <button class="chip" data-tipo="funcional">Funcional</button>
             </div>
@@ -281,7 +281,7 @@
   <section class="pagina" id="pagina-rodar">
     <article class="cartao">
       <h2>Rodar o modelo do zero</h2>
-      <p class="sub">Escolha os dados, ajuste os parâmetros e rode a segmentação funcional, estrutural e combinada no seu navegador, com o mesmo algoritmo do notebook. Nada é enviado ao servidor.</p>
+      <p class="sub">Escolha os dados, ajuste os parâmetros e rode a segmentação funcional, estrutural e funcional + estrutural no seu navegador, com o mesmo algoritmo do notebook. Nada é enviado ao servidor.</p>
       <ol class="passos-rodar">
         <li>
           <h3>Dados de entrada</h3>
@@ -379,7 +379,7 @@
         </div>
         <h3>Mapa do resultado</h3>
         <div class="ferramentas-tabela">
-          <label class="controle"><span class="rot-controle">Segmentação</span><select id="rd-tipo-mapa"><option value="combinada">Combinada</option><option value="estrutural">Estrutural</option><option value="funcional">Funcional</option></select></label>
+          <label class="controle"><span class="rot-controle">Segmentação</span><select id="rd-tipo-mapa"><option value="combinada">Funcional + estrutural</option><option value="estrutural">Estrutural</option><option value="funcional">Funcional</option></select></label>
         </div>
         <p class="sub" id="rd-sem-geo" hidden>Nenhum SRE do dataset tem geometria: envie um shapefile ou use códigos de SRE da malha.</p>
         <div id="rd-mapa" class="mapa mapa-medio"></div>
@@ -558,7 +558,7 @@
       <ul>
         <li><strong>Funcional</strong> — PELT <code>l2</code> sobre o IGG padronizado (mudança de nível). Penalidade = α_km × extensão, com faixa de ±50% escolhida pelo BIC; vizinhos sem diferença de média (Welch) são fundidos.</li>
         <li><strong>Estrutural</strong> — PELT <code>normal</code> (média e variância por segmento) sobre o d0, como em Biswas &amp; Kuna (2022). A penalidade da rede é o cotovelo da curva “quebras na malha × penalidade”.</li>
-        <li><strong>Combinada</strong> — as bases funcionais são subsegmentadas pelo PELT estrutural; quebras a menos de 0,4 km se juntam, segmentos menores que 0,6 km são evitados e vizinhos sem diferença são fundidos.</li>
+        <li><strong>Funcional + estrutural</strong> — o resultado final junta as fronteiras das duas segmentações; fronteiras a até 0,4 km uma da outra contam como uma só (na posição estrutural). Cada segmento tem no mínimo 1 km e no máximo 20 km; trechos maiores são divididos em partes iguais e SREs com menos de 1 km ficam com um segmento.</li>
       </ul>
       <h3>O que a penalidade faz</h3>
       <p>O PELT minimiza <code>custo do ajuste + penalidade × nº de quebras</code>. Uma quebra só entra se reduzir o custo mais do que a penalidade: penalidade baixa gera muitos segmentos curtos; alta, poucos e longos.</p>

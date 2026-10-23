@@ -8,7 +8,7 @@ const CONFIG = { displaylogo: false, responsive: true, locale: 'pt-BR', modeBarB
 const MINI = { ...CONFIG, displayModeBar: false, staticPlot: false };
 const TRACO = { funcional: 'dash', estrutural: 'dot', combinada: 'solid' };
 const COR_REMOVIDA = '#9e9e9e', COR_NOVA = '#2e9d4f';
-export const NOMES_TIPO = { funcional: 'Funcional (IGG, l2)', estrutural: 'Estrutural (d0, PELT normal)', combinada: 'Combinada (2 etapas)' };
+export const NOMES_TIPO = { funcional: 'Funcional (IGG, l2)', estrutural: 'Estrutural (d0, PELT normal)', combinada: 'Funcional + estrutural' };
 
 function cores() {
   return {
