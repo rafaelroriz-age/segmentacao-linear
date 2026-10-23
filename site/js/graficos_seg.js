@@ -100,7 +100,7 @@ export function grafSinal(el, a, chave, quebras, { titulo = '', modo = 'media', 
 export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const c = tema();
   const cfg = r.cfg;
-  const corF = '#7c3aed', corE = c.estrut, corC = c.texto;
+  const corF = '#7c3aed', corE = c.estrut, corL = c.texto;
   const x = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
   const kmF = r.func_s.map((b) => a.ini[b]), kmE = r.estrut_s.map((b) => a.ini[b]);
   const coinc = [], soF = [], soE = [...kmE];
@@ -108,31 +108,21 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
     const j = soE.findIndex((e) => Math.abs(e - k) <= tol);
     if (j >= 0) { coinc.push(soE[j]); soE.splice(j, 1); } else soF.push(k);   // fica na posição estrutural, como no resultado
   });
-  const medias = (serie, quebras) => {
-    const mx = [], my = [];
-    segmentos(a, quebras).forEach((s) => {
-      const v = serie.slice(s.lo, s.hi).filter(Number.isFinite);
-      if (v.length) { const m = media(v); mx.push(s.k0, s.k1, null); my.push(m, m, null); }
-    });
-    return { mx, my };
-  };
   const serieE = cfg.estrut === 'aca' ? a.d0 : a[cfg.estrut];
   const chaveE = cfg.estrut === 'aca' ? 'd0' : cfg.estrut;
-  const mF = medias(a[cfg.func], r.func_s), mE = medias(serieE, r.estrut_s);
   const nomeF = SINAIS_FUNC[cfg.func], nomeE = cfg.estrut === 'aca' ? 'D0' : SINAIS_ESTRUT[cfg.estrut].split(' (')[0];
   const shapes = segmentos(a, fronteirasUniao(a, r, tol)).map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1,
     fillcolor: i % 2 ? hexA(c.texto, 0.05) : 'rgba(0,0,0,0)', line: { width: 0 }, layer: 'below' }));
-  const vline = (k, cor, dash, w) => ({ type: 'line', xref: 'x', yref: 'paper', x0: k, x1: k, y0: 0, y1: 1, line: { color: cor, width: w, dash } });
-  soF.forEach((k) => shapes.push(vline(k, corF, 'dot', 1.3)));
-  soE.forEach((k) => shapes.push(vline(k, corE, 'dot', 1.3)));
-  coinc.forEach((k) => shapes.push(vline(k, corC, 'solid', 2)));
-  const leg = (nome, cor, dash, w) => ({ x: [null], y: [null], mode: 'lines', name: nome, line: { color: cor, dash, width: w }, hoverinfo: 'skip' });
+  // uma cor só para as fronteiras (texto: contraste nos dois temas); o traço distingue a origem
+  const vline = (k, dash, w) => ({ type: 'line', xref: 'x', yref: 'paper', x0: k, x1: k, y0: 0, y1: 1, line: { color: hexA(corL, 0.75), width: w, dash } });
+  soF.forEach((k) => shapes.push(vline(k, 'dot', 1.3)));
+  soE.forEach((k) => shapes.push(vline(k, 'dash', 1.3)));
+  coinc.forEach((k) => shapes.push(vline(k, 'solid', 2)));
+  const leg = (nome, dash, w) => ({ x: [null], y: [null], mode: 'lines', name: nome, line: { color: corL, dash, width: w }, hoverinfo: 'skip' });
   const traces = [
     { x, y: a[cfg.func], mode: 'lines', name: nomeF, line: { color: hexA(corF, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeF} %{y:.2f}<extra></extra>` },
-    { x: mF.mx, y: mF.my, mode: 'lines', name: `média ${nomeF}`, line: { color: corF, width: 2.6 }, hoverinfo: 'skip' },
     { x, y: serieE, yaxis: 'y2', mode: 'lines', name: nomeE, line: { color: hexA(corE, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeE} %{y:.1f}<extra></extra>` },
-    { x: mE.mx, y: mE.my, yaxis: 'y2', mode: 'lines', name: `média ${nomeE}`, line: { color: corE, width: 2.6 }, hoverinfo: 'skip' },
-    leg(`fronteira funcional (${soF.length})`, corF, 'dot', 1.5), leg(`fronteira estrutural (${soE.length})`, corE, 'dot', 1.5), leg(`coincidente (${coinc.length})`, corC, 'solid', 2),
+    leg(`fronteira funcional (${soF.length})`, 'dot', 1.5), leg(`fronteira estrutural (${soE.length})`, 'dash', 1.5), leg(`coincidente (${coinc.length})`, 'solid', 2),
   ];
   return Plotly.react(typeof el === 'string' ? document.getElementById(el) : el, traces, {
     height: altura, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', separators: ',.', hovermode: 'x unified', shapes,
