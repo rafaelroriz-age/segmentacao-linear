@@ -25,13 +25,11 @@ export function segmentos(a, quebras) {
   });
 }
 
-/** fronteiras do gráfico 3 (índices): todas as estruturais + as funcionais que não caem a até tol km de uma
- *  estrutural (essas contam como uma só, na posição estrutural). Também definem a linha "Funcional + estrutural"
- *  do gráfico 4, para os dois gráficos mostrarem os mesmos segmentos. */
-export function fronteirasUniao(a, r, tol = 0.4) {
-  const kmE = r.estrut_s.map((b) => a.ini[b]);
-  const soF = r.func_s.filter((b) => !kmE.some((e) => Math.abs(e - a.ini[b]) <= tol));
-  return [...new Set([...r.estrut_s, ...soF])].sort((x, y) => x - y);
+/** fronteiras do resultado (índices), as mesmas do mapa e da tabela: união das funcionais e estruturais, com os
+ *  segmentos menores que o mínimo já fundidos ao vizinho mais homogêneo (modelo.js, regraEspacialHomogenea).
+ *  Definem o gráfico 3 e a linha "Funcional + estrutural" do gráfico 4. */
+export function fronteirasUniao(a, r) {
+  return [...r.comb_s].sort((x, y) => x - y);
 }
 
 /** % da grade de penalidades em que cada quebra (km) aparece a ≤ tol km */
@@ -102,19 +100,21 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const cfg = r.cfg;
   const corF = '#7c3aed', corE = c.estrut, corL = c.texto;
   const x = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
+  // cada fronteira do resultado vem da funcional, da estrutural, das duas (a até tol km) ou da divisão de trechos > máximo
   const kmF = r.func_s.map((b) => a.ini[b]), kmE = r.estrut_s.map((b) => a.ini[b]);
-  const coinc = [], soF = [], soE = [...kmE];
-  kmF.forEach((k) => {
-    const j = soE.findIndex((e) => Math.abs(e - k) <= tol);
-    if (j >= 0) { coinc.push(soE[j]); soE.splice(j, 1); } else soF.push(k);   // fica na posição estrutural, como no resultado
+  const coinc = [], soF = [], soE = [], div = [];
+  r.comb_s.map((b) => a.ini[b]).forEach((k) => {
+    const f = kmF.some((v) => Math.abs(v - k) <= tol), e = kmE.some((v) => Math.abs(v - k) <= tol);
+    (f && e ? coinc : f ? soF : e ? soE : div).push(k);
   });
   const serieE = cfg.estrut === 'aca' ? a.d0 : a[cfg.estrut];
   const chaveE = cfg.estrut === 'aca' ? 'd0' : cfg.estrut;
   const nomeF = SINAIS_FUNC[cfg.func], nomeE = cfg.estrut === 'aca' ? 'D0' : SINAIS_ESTRUT[cfg.estrut].split(' (')[0];
-  const shapes = segmentos(a, fronteirasUniao(a, r, tol)).map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1,
+  const shapes = segmentos(a, fronteirasUniao(a, r)).map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1,
     fillcolor: i % 2 ? hexA(c.texto, 0.05) : 'rgba(0,0,0,0)', line: { width: 0 }, layer: 'below' }));
   // uma cor só para as fronteiras (texto: contraste nos dois temas); o traço distingue a origem
   const vline = (k, dash, w) => ({ type: 'line', xref: 'x', yref: 'paper', x0: k, x1: k, y0: 0, y1: 1, line: { color: hexA(corL, 0.75), width: w, dash } });
+  div.forEach((k) => shapes.push(vline(k, 'dashdot', 1.3)));
   soF.forEach((k) => shapes.push(vline(k, 'dot', 1.3)));
   soE.forEach((k) => shapes.push(vline(k, 'dash', 1.3)));
   coinc.forEach((k) => shapes.push(vline(k, 'solid', 2)));
@@ -122,7 +122,7 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const traces = [
     { x, y: a[cfg.func], mode: 'lines', name: nomeF, line: { color: hexA(corF, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeF} %{y:.2f}<extra></extra>` },
     { x, y: serieE, yaxis: 'y2', mode: 'lines', name: nomeE, line: { color: hexA(corE, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeE} %{y:.1f}<extra></extra>` },
-    leg(`fronteira funcional (${soF.length})`, 'dot', 1.5), leg(`fronteira estrutural (${soE.length})`, 'dash', 1.5), leg(`coincidente (${coinc.length})`, 'solid', 2),
+    leg(`fronteira funcional (${soF.length})`, 'dot', 1.5), leg(`fronteira estrutural (${soE.length})`, 'dash', 1.5), leg(`coincidente (${coinc.length})`, 'solid', 2), ...(div.length ? [leg(`divisão do máximo (${div.length})`, 'dashdot', 1.5)] : []),
   ];
   return Plotly.react(typeof el === 'string' ? document.getElementById(el) : el, traces, {
     height: altura, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', separators: ',.', hovermode: 'x unified', shapes,

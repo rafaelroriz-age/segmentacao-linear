@@ -360,15 +360,66 @@ export function regraEspacial(fronteiras, kmMin, kmMax, p = PADRAO) {
   for (const f of ord) {
     if (f - ultimo >= p.MIN_COMP_COMB_KM - eps && kmMax - f >= p.MIN_COMP_COMB_KM - eps) { limpas.push(f); ultimo = f; }
   }
-  const max = p.MAX_COMP_KM;
-  if (!(max > 0)) return limpas;
-  const lim = [kmMin, ...limpas, kmMax], out = [];
+  return dividirMaximo(limpas, kmMin, kmMax, p);
+}
+
+/** divide em partes iguais os trechos maiores que MAX_COMP_KM (fronteiras em km, já ordenadas) */
+function dividirMaximo(fronteiras, kmMin, kmMax, p) {
+  const max = p.MAX_COMP_KM, eps = 1e-9;
+  if (!(max > 0)) return fronteiras;
+  const lim = [kmMin, ...fronteiras, kmMax], out = [];
   for (let i = 0; i < lim.length - 1; i++) {
     if (i > 0) out.push(lim[i]);
     const L = lim[i + 1] - lim[i];
     if (L > max + eps) { const n = Math.ceil(L / max - eps); for (let j = 1; j < n; j++) out.push(lim[i] + (j * L) / n); }
   }
   return out;
+}
+
+/** mínimo por homogeneidade: enquanto houver segmento menor que MIN_COMP_COMB_KM, o mais curto é fundido ao vizinho
+ *  mais parecido (menor custo de Ward n1·n2/(n1+n2)·‖m1−m2‖² sobre os sinais padronizados pelo desvio do SRE);
+ *  a fusão que passaria de MAX_COMP_KM só vale se a outra também passar. Depois, divide o que passa do máximo.
+ *  Mesma regra de supabase/exportar_dados.py (regra_espacial_homogenea). */
+export function regraEspacialHomogenea(fronteiras, kmMin, kmMax, ini, sinais, p = PADRAO) {
+  const eps = 1e-9, N = ini.length;
+  const z = sinais.map((s) => {
+    const m = E.media(s);
+    let v = 0;
+    for (const x of s) v += (x - m) * (x - m);
+    const sd = Math.sqrt(v / s.length);
+    return Array.from(s, (x) => (sd > 0 && Number.isFinite(sd) ? (x - m) / sd : 0));
+  });
+  let b = [...new Set(fronteiras)].filter((f) => f > kmMin && f < kmMax).sort((x, y) => x - y);
+  const estat = (k0, k1) => {
+    const lo = k0 <= kmMin ? 0 : searchsorted(ini, k0), hi = k1 >= kmMax ? N : searchsorted(ini, k1);
+    const n = Math.max(hi - lo, 1);
+    return { n, m: z.map((s) => { let t = 0; for (let i = lo; i < hi; i++) t += s[i]; return t / n; }) };
+  };
+  const custo = (k0, k1, k2) => {
+    const A = estat(k0, k1), B = estat(k1, k2);
+    let d = 0;
+    for (let j = 0; j < A.m.length; j++) d += (A.m[j] - B.m[j]) ** 2;
+    return (A.n * B.n) / (A.n + B.n) * d;
+  };
+  for (;;) {
+    const lim = [kmMin, ...b, kmMax];
+    if (lim.length < 3) break;
+    let i = -1, Lmin = Infinity;
+    for (let s = 0; s < lim.length - 1; s++) {
+      const L = lim[s + 1] - lim[s];
+      if (L < p.MIN_COMP_COMB_KM - eps && L < Lmin - eps) { Lmin = L; i = s; }
+    }
+    if (i < 0) break;
+    // segmento i = [lim[i], lim[i+1]]; esquerda remove a fronteira i-1, direita remove a i
+    const cand = [];
+    if (i > 0) cand.push({ rem: i - 1, c: custo(lim[i - 1], lim[i], lim[i + 1]), L: lim[i + 1] - lim[i - 1] });
+    if (i < lim.length - 2) cand.push({ rem: i, c: custo(lim[i], lim[i + 1], lim[i + 2]), L: lim[i + 2] - lim[i] });
+    const ok = cand.filter((c) => !(p.MAX_COMP_KM > 0) || c.L <= p.MAX_COMP_KM + eps);
+    const pool = ok.length ? ok : cand;
+    const esc = pool.reduce((x, y) => (y.c < x.c ? y : x));
+    b.splice(esc.rem, 1);
+  }
+  return dividirMaximo(b, kmMin, kmMax, p);
 }
 
 /** regraEspacial sobre quebras em índices (1º intervalo do segmento seguinte) */
@@ -378,12 +429,12 @@ function regraEspacialIdx(quebras, ini, kmMin, kmMax, p) {
 }
 
 /** funcional + estrutural: fronteiras estruturais + funcionais que não caem a até BUFFER_KM de uma estrutural
- *  (as coincidentes ficam na posição estrutural); depois a regra espacial.
+ *  (as coincidentes ficam na posição estrutural); depois segmentos < mínimo são fundidos ao vizinho mais homogêneo.
  *  Mesma regra de supabase/exportar_dados.py (reconciliar_uniao). */
-export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO) {
+export function reconciliarCombinada(funcKm, subKm, kmMin, kmMax, p = PADRAO, ini = null, sinais = []) {
   const fronteiras = [...subKm];
   for (const fk of funcKm) if (!subKm.some((sk) => Math.abs(fk - sk) <= p.BUFFER_KM)) fronteiras.push(fk);
-  return regraEspacial(fronteiras, kmMin, kmMax, p);
+  return ini && sinais.length ? regraEspacialHomogenea(fronteiras, kmMin, kmMax, ini, sinais, p) : regraEspacial(fronteiras, kmMin, kmMax, p);
 }
 
 function searchsorted(arr, v) {
@@ -531,7 +582,7 @@ export function segmentarSre(a, { alphaFunc, beta, cam, p = PADRAO, auditar = tr
     for (let i = 0; i < lims.length - 1; i++) subS.push(...segmentarEstruturalTrecho(yEst, lims[i], lims[i + 1], beta, piso, p, cfg.modelo));
   }
   const funcKm = funcS.map((s) => ini[s]);
-  const combKm = reconciliarCombinada(funcKm, subS.map((s) => ini[s]), kmMin, kmMax, p);
+  const combKm = reconciliarCombinada(funcKm, subS.map((s) => ini[s]), kmMin, kmMax, p, ini, [...(temD0 ? [yEst] : []), ...(temIgg ? [sFunc] : [])]);
   let combS = [...new Set(combKm.map((k) => searchsorted(ini, k)))].filter((s) => s > 0 && s < N);
   const nCombBruto = combS.length;
   if (p.FUNDIR_COMB) {

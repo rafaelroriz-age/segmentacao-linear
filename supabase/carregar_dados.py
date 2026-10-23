@@ -43,6 +43,24 @@ def preparar(df, tipos):
     return df
 
 
+def diagnosticar(c):
+    """Mostra o motivo real de uma falha de conexao: no Windows em portugues o psycopg2 esconde a mensagem do
+    servidor atras de um UnicodeDecodeError (mensagem em cp1252)."""
+    import socket
+    try:
+        enderecos = socket.getaddrinfo(c['host'], c['port'], proto=socket.IPPROTO_TCP)
+    except OSError as e:
+        sys.exit(f"Nao foi possivel resolver o host {c['host']!r}: {e}")
+    if not any(e[0] == socket.AF_INET for e in enderecos):
+        sys.exit(f"{c['host']} so tem IPv6 e esta rede nao alcanca. Use a URI do Session pooler "
+                 "(host aws-...pooler.supabase.com, usuario postgres.<ref>).")
+    try:
+        socket.create_connection((c['host'], c['port']), timeout=10).close()
+    except OSError as e:
+        sys.exit(f"Sem conexao TCP com {c['host']}:{c['port']}: {e}")
+    print(f"host {c['host']}:{c['port']} alcancavel, usuario {c['user']!r}")
+
+
 def main():
     # Tenta ler da variável de ambiente primeiro, depois de um argumento
     url = os.environ.get('SUPABASE_DB_URL')
@@ -59,6 +77,12 @@ def main():
     conexao = dict(host=u.hostname, port=u.port or 5432, user=unquote(u.username or ''),
                    password=unquote(u.password or ''), dbname=(u.path or '/postgres').lstrip('/') or 'postgres',
                    sslmode='require', connect_timeout=15)
+    diagnosticar(conexao)
+    try:
+        psycopg2.connect(**conexao).close()
+    except UnicodeDecodeError as e:
+        msg = e.object.decode('cp1252', 'replace')
+        sys.exit(f'O servidor recusou a conexao: {msg.strip()}')
     with psycopg2.connect(**conexao) as con, con.cursor() as cur:
         cur.execute('truncate ' + ', '.join(f'public.{t}' for t in TABELAS))
         for t in TABELAS:

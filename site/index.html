@@ -181,7 +181,7 @@
           <div id="insights-modelo"></div>
           <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="tit-func-modelo"></span></h3><div id="graf-func-modelo" class="graf"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="tit-estrut-modelo"></span></h3><div id="graf-estrut-modelo" class="graf"></div></div>
-          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. As linhas são as mesmas fronteiras dos gráficos 1 e 2: pontilhadas a funcional, tracejadas a estrutural; a linha cheia marca onde as duas coincidem (a até 0,4 km). As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="graf-unido-modelo"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. São as fronteiras do resultado (as do mapa): pontilhadas vêm da funcional, tracejadas da estrutural, a linha cheia onde as duas coincidem (a até 0,4 km). Fronteiras que deixariam um segmento menor que 1 km foram removidas, fundindo-o ao vizinho mais parecido. As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="graf-unido-modelo"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">4</span> Resultado: segmentos e classe de condição</h3><p class="sub">Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante).</p><div id="graf-regua-modelo" class="graf"></div></div>
           <details class="detalhes"><summary>Diagnóstico estatístico (caminho CROPS, resíduos e auditoria do modelo gravado)</summary>
           <div class="duas-colunas">
@@ -400,7 +400,7 @@
           <div id="rd-insights"></div>
           <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="rd-tit-func"></span></h3><div class="graf" id="rd-graf-func"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="rd-tit-estrut"></span></h3><div class="graf" id="rd-graf-estrut"></div></div>
-          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. As linhas são as mesmas fronteiras dos gráficos 1 e 2: pontilhadas a funcional, tracejadas a estrutural; a linha cheia marca onde as duas coincidem (a até 0,4 km). As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="rd-graf-unido"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. São as fronteiras do resultado (as do mapa): pontilhadas vêm da funcional, tracejadas da estrutural, a linha cheia onde as duas coincidem (a até 0,4 km). Fronteiras que deixariam um segmento menor que 1 km foram removidas, fundindo-o ao vizinho mais parecido. As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="rd-graf-unido"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">4</span> Resultado: segmentos e classe de condição</h3><div class="graf" id="rd-graf-regua"></div></div>
           <div class="explicacao" id="rd-explicacao"></div>
           <h3>Segmentos</h3>
@@ -560,7 +560,7 @@
         <li><strong>Estrutural</strong> — PELT <code>normal</code> (média e variância por segmento) sobre o d0, como em Biswas &amp; Kuna (2022). A penalidade da rede é o cotovelo da curva “quebras na malha × penalidade”.</li>
         <li><strong>Funcional + estrutural</strong> — o resultado final junta as fronteiras das duas segmentações; fronteiras a até 0,4 km uma da outra contam como uma só (na posição estrutural).</li>
       </ul>
-      <p><strong>Regra espacial</strong> — vale para as três segmentações: cada segmento tem no mínimo 1 km e no máximo 20 km. Trechos maiores são divididos em partes iguais e SREs com menos de 1 km ficam com um segmento.</p>
+      <p><strong>Regra espacial</strong> — vale para as três segmentações: cada segmento tem no mínimo 1 km e no máximo 20 km. Na junção funcional + estrutural, um segmento menor que 1 km é fundido ao vizinho mais parecido (menor aumento de variância nos sinais funcional e estrutural). Trechos maiores são divididos em partes iguais e SREs com menos de 1 km ficam com um segmento.</p>
       <h3>O que a penalidade faz</h3>
       <p>O PELT minimiza <code>custo do ajuste + penalidade × nº de quebras</code>. Uma quebra só entra se reduzir o custo mais do que a penalidade: penalidade baixa gera muitos segmentos curtos; alta, poucos e longos.</p>
       <h3>Fidelidade e dados</h3>

@@ -79,7 +79,14 @@ def regra_espacial(fronteiras, km_min, km_max):
         if f - ultimo >= MIN_COMP_KM - eps and km_max - f >= MIN_COMP_KM - eps:
             limpas.append(f)
             ultimo = f
-    lim, out = [km_min] + limpas + [km_max], []
+    return dividir_maximo(limpas, km_min, km_max)
+
+
+def dividir_maximo(fronteiras, km_min, km_max):
+    """Divide em partes iguais os trechos maiores que MAX_COMP_KM."""
+    import math
+    eps = 1e-9
+    lim, out = [km_min] + list(fronteiras) + [km_max], []
     for i in range(len(lim) - 1):
         if i > 0:
             out.append(lim[i])
@@ -90,6 +97,56 @@ def regra_espacial(fronteiras, km_min, km_max):
     return out
 
 
+def regra_espacial_homogenea(fronteiras, km_min, km_max, ini, sinais):
+    """Minimo por homogeneidade: enquanto houver segmento menor que MIN_COMP_KM, o mais curto e fundido ao vizinho
+    mais parecido (menor custo de Ward n1*n2/(n1+n2)*||m1-m2||^2 sobre os sinais padronizados pelo desvio do SRE);
+    a fusao que passaria de MAX_COMP_KM so vale se a outra tambem passar. Depois divide o que passa do maximo.
+    Mesma regra de site/js/modelo.js (regraEspacialHomogenea)."""
+    eps, N = 1e-9, len(ini)
+    z = []
+    for sig in sinais:
+        sig = np.asarray(sig, dtype=float)
+        sd = float(np.sqrt(np.mean((sig - sig.mean()) ** 2)))
+        z.append((sig - sig.mean()) / sd if sd > 0 and np.isfinite(sd) else np.zeros(len(sig)))
+    b = sorted(f for f in set(fronteiras) if km_min < f < km_max)
+
+    def estat(k0, k1):
+        lo = 0 if k0 <= km_min else int(np.searchsorted(ini, k0))
+        hi = N if k1 >= km_max else int(np.searchsorted(ini, k1))
+        n = max(hi - lo, 1)
+        return n, [float(np.sum(s[lo:hi])) / n for s in z]
+
+    def custo(k0, k1, k2):
+        na, ma = estat(k0, k1)
+        nb, mb = estat(k1, k2)
+        return na * nb / (na + nb) * sum((x - y) ** 2 for x, y in zip(ma, mb))
+
+    while True:
+        lim = [km_min] + b + [km_max]
+        if len(lim) < 3:
+            break
+        i, Lmin = -1, float('inf')
+        for k in range(len(lim) - 1):
+            L = lim[k + 1] - lim[k]
+            if L < MIN_COMP_KM - eps and L < Lmin - eps:
+                Lmin, i = L, k
+        if i < 0:
+            break
+        cand = []
+        if i > 0:
+            cand.append((i - 1, custo(lim[i - 1], lim[i], lim[i + 1]), lim[i + 1] - lim[i - 1]))
+        if i < len(lim) - 2:
+            cand.append((i, custo(lim[i], lim[i + 1], lim[i + 2]), lim[i + 2] - lim[i]))
+        ok = [c for c in cand if c[2] <= MAX_COMP_KM + eps]
+        pool = ok if ok else cand
+        esc = pool[0]
+        for c in pool[1:]:
+            if c[1] < esc[1]:
+                esc = c
+        del b[esc[0]]
+    return dividir_maximo(b, km_min, km_max)
+
+
 def regra_espacial_idx(quebras, ini, km_min, km_max):
     """regra_espacial sobre quebras em indices (1o intervalo do segmento seguinte)."""
     km = regra_espacial([float(ini[s]) for s in quebras], km_min, km_max)
@@ -97,13 +154,16 @@ def regra_espacial_idx(quebras, ini, km_min, km_max):
     return sorted({int(i) for i in np.searchsorted(ini, km) if 0 < i < N})
 
 
-def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buffer_km=0.4):
+def reconciliar_uniao(func_km, sub_km_raw, km_min, km_max, min_comp_km=None, buffer_km=0.4, ini=None, sinais=()):
     """Funcional + estrutural: fronteiras estruturais + funcionais a mais de buffer_km de uma estrutural;
-    depois minimo e maximo por segmento. Mesma regra de site/js/modelo.js (reconciliarCombinada)."""
+    depois segmentos menores que o minimo sao fundidos ao vizinho mais homogeneo e o maximo e imposto.
+    Mesma regra de site/js/modelo.js (reconciliarCombinada)."""
     fronteiras = list(sub_km_raw)
     for fk in func_km:
         if not any(abs(fk - sk) <= buffer_km for sk in sub_km_raw):
             fronteiras.append(fk)
+    if ini is not None and len(sinais):
+        return regra_espacial_homogenea(fronteiras, km_min, km_max, ini, sinais)
     return regra_espacial(fronteiras, km_min, km_max)
 
 
@@ -144,6 +204,11 @@ def rodar_notebook():
             src = src.replace(alvo, '    func_s = regra_espacial_idx(func_s, ini, km_min, km_max)\n'
                                     '    estrut_s = regra_espacial_idx(estrut_s, ini, km_min, km_max)\n' + alvo)
             ns['regra_espacial_idx'] = regra_espacial_idx
+            chamada = "comb_km = reconciliar_combinada(func_km, [float(ini[s]) for s in sub_s], km_min, km_max)"
+            if chamada not in src:
+                sys.exit('Celula 6 mudou: nao achei a chamada de reconciliar_combinada')
+            src = src.replace(chamada, "comb_km = reconciliar_combinada(func_km, [float(ini[s]) for s in sub_s], km_min, km_max, ini=ini, "
+                                       "sinais=([a['d0']] if tem_d0 else []) + ([a['igg']] if tem_igg else []))")
         t0 = time.time()
         log(f'celula {i} ...')
         exec(compile(src, f'<celula {i}>', 'exec'), ns)

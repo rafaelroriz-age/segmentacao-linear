@@ -26,7 +26,7 @@ const GLOSSARIO = [
   ['Robustez da quebra', '% das penalidades testadas em que a quebra aparece (a até 0,4 km). Quebra robusta (perto de 100%) é uma fronteira confiável; frágil depende da penalidade escolhida.'],
   ['Classe limitante', 'No resultado, a pior classe entre a condição funcional (IGG ou IRI) e a estrutural (D0) do segmento: é a que comanda a intervenção.'],
   ['Funcional + estrutural', 'Resultado final: todas as fronteiras funcionais e estruturais juntas; quando as duas caem a até 0,4 km, contam como uma só.'],
-  ['Regra espacial', 'Vale para todos os segmentos (funcional, estrutural e resultado): no mínimo 1 km e no máximo 20 km. Trechos maiores que 20 km são divididos em partes iguais; SRE com menos de 1 km fica com 1 segmento.'],
+  ['Regra espacial', 'Vale para todos os segmentos (funcional, estrutural e resultado): no mínimo 1 km e no máximo 20 km. Na junção funcional + estrutural, um segmento menor que 1 km é fundido ao vizinho mais parecido (menor aumento de variância, nos sinais funcional e estrutural). Trechos maiores que 20 km são divididos em partes iguais; SRE com menos de 1 km fica com 1 segmento.'],
   ['PELT', 'Algoritmo exato que encontra as quebras que minimizam “custo do ajuste + penalidade × nº de quebras” (Killick et al., 2012).'],
   ['Penalidade', 'Quanto custa cada quebra. Penalidade baixa gera muitos segmentos curtos; alta, poucos e longos.'],
   ['α_km', 'Quociente de penalidade funcional: penalidade por km de SRE, para SREs curtos e longos terem densidade de quebras parecida.'],
