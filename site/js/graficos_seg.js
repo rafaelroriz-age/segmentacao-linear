@@ -25,6 +25,15 @@ export function segmentos(a, quebras) {
   });
 }
 
+/** fronteiras do gráfico 3 (índices): todas as estruturais + as funcionais que não caem a até tol km de uma
+ *  estrutural (essas contam como uma só, na posição estrutural). Também definem a linha "Funcional + estrutural"
+ *  do gráfico 4, para os dois gráficos mostrarem os mesmos segmentos. */
+export function fronteirasUniao(a, r, tol = 0.4) {
+  const kmE = r.estrut_s.map((b) => a.ini[b]);
+  const soF = r.func_s.filter((b) => !kmE.some((e) => Math.abs(e - a.ini[b]) <= tol));
+  return [...new Set([...r.estrut_s, ...soF])].sort((x, y) => x - y);
+}
+
 /** % da grade de penalidades em que cada quebra (km) aparece a ≤ tol km */
 export function robustez(quebrasKm, passosKm, tol = 0.4) {
   if (!passosKm.length) return quebrasKm.map(() => null);
@@ -93,17 +102,12 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const cfg = r.cfg;
   const corF = '#7c3aed', corE = c.estrut, corC = c.texto;
   const x = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
-  // as linhas cheias são exatamente as fronteiras do resultado (gráfico 4), classificadas pela origem;
-  // fronteiras funcionais/estruturais que a regra de 1 km descartou ficam só como traço cinza claro
   const kmF = r.func_s.map((b) => a.ini[b]), kmE = r.estrut_s.map((b) => a.ini[b]);
-  const kmR = r.comb_s.map((b) => a.ini[b]);
-  const perto = (lst, k, d) => lst.some((v) => Math.abs(v - k) <= d);
-  const coinc = [], soF = [], soE = [], div = [];
-  kmR.forEach((k) => {
-    const f = perto(kmF, k, tol), e = perto(kmE, k, 1e-6);
-    if (f && e) coinc.push(k); else if (e) soE.push(k); else if (perto(kmF, k, 1e-6)) soF.push(k); else div.push(k);
+  const coinc = [], soF = [], soE = [...kmE];
+  kmF.forEach((k) => {
+    const j = soE.findIndex((e) => Math.abs(e - k) <= tol);
+    if (j >= 0) { coinc.push(soE[j]); soE.splice(j, 1); } else soF.push(k);   // fica na posição estrutural, como no resultado
   });
-  const descart = [...kmF, ...kmE].filter((k) => !perto(kmR, k, 1e-6) && !(perto(kmF, k, 1e-6) && perto(kmR, k, tol) && perto(kmE, k, tol)));
   const medias = (serie, quebras) => {
     const mx = [], my = [];
     segmentos(a, quebras).forEach((s) => {
@@ -116,23 +120,19 @@ export function grafUnido(el, a, r, { tol = 0.4, altura = 320 } = {}) {
   const chaveE = cfg.estrut === 'aca' ? 'd0' : cfg.estrut;
   const mF = medias(a[cfg.func], r.func_s), mE = medias(serieE, r.estrut_s);
   const nomeF = SINAIS_FUNC[cfg.func], nomeE = cfg.estrut === 'aca' ? 'D0' : SINAIS_ESTRUT[cfg.estrut].split(' (')[0];
-  const shapes = segmentos(a, r.comb_s).map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1,
+  const shapes = segmentos(a, fronteirasUniao(a, r, tol)).map((s, i) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: s.k0, x1: s.k1, y0: 0, y1: 1,
     fillcolor: i % 2 ? hexA(c.texto, 0.05) : 'rgba(0,0,0,0)', line: { width: 0 }, layer: 'below' }));
   const vline = (k, cor, dash, w) => ({ type: 'line', xref: 'x', yref: 'paper', x0: k, x1: k, y0: 0, y1: 1, line: { color: cor, width: w, dash } });
-  descart.forEach((k) => shapes.push(vline(k, hexA(c.mudo, 0.55), 'dot', 1)));
-  soF.forEach((k) => shapes.push(vline(k, corF, 'solid', 1.8)));
-  soE.forEach((k) => shapes.push(vline(k, corE, 'solid', 1.8)));
-  div.forEach((k) => shapes.push(vline(k, c.mudo, 'dash', 1.8)));
-  coinc.forEach((k) => shapes.push(vline(k, corC, 'solid', 2.2)));
+  soF.forEach((k) => shapes.push(vline(k, corF, 'dot', 1.3)));
+  soE.forEach((k) => shapes.push(vline(k, corE, 'dot', 1.3)));
+  coinc.forEach((k) => shapes.push(vline(k, corC, 'solid', 2)));
   const leg = (nome, cor, dash, w) => ({ x: [null], y: [null], mode: 'lines', name: nome, line: { color: cor, dash, width: w }, hoverinfo: 'skip' });
   const traces = [
     { x, y: a[cfg.func], mode: 'lines', name: nomeF, line: { color: hexA(corF, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeF} %{y:.2f}<extra></extra>` },
     { x: mF.mx, y: mF.my, mode: 'lines', name: `média ${nomeF}`, line: { color: corF, width: 2.6 }, hoverinfo: 'skip' },
     { x, y: serieE, yaxis: 'y2', mode: 'lines', name: nomeE, line: { color: hexA(corE, 0.45), width: 0.9 }, hovertemplate: `km %{x:.2f}: ${nomeE} %{y:.1f}<extra></extra>` },
     { x: mE.mx, y: mE.my, yaxis: 'y2', mode: 'lines', name: `média ${nomeE}`, line: { color: corE, width: 2.6 }, hoverinfo: 'skip' },
-    leg(`fronteira funcional (${soF.length})`, corF, 'solid', 1.8), leg(`fronteira estrutural (${soE.length})`, corE, 'solid', 1.8), leg(`coincidente (${coinc.length})`, corC, 'solid', 2.2),
-    ...(div.length ? [leg(`divisão por 20 km (${div.length})`, c.mudo, 'dash', 1.8)] : []),
-    ...(descart.length ? [leg(`descartada: segmento < 1 km (${descart.length})`, hexA(c.mudo, 0.55), 'dot', 1)] : []),
+    leg(`fronteira funcional (${soF.length})`, corF, 'dot', 1.5), leg(`fronteira estrutural (${soE.length})`, corE, 'dot', 1.5), leg(`coincidente (${coinc.length})`, corC, 'solid', 2),
   ];
   return Plotly.react(typeof el === 'string' ? document.getElementById(el) : el, traces, {
     height: altura, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', separators: ',.', hovermode: 'x unified', shapes,
@@ -161,7 +161,7 @@ export function tabelaRegua(a, r, limites) {
     const lim = cf.classe === 'Sem dado' ? cd : cd.classe === 'Sem dado' ? cf : pior(cf, cd);
     return { tipo, seg: i + 1, ...s, ext: s.k1 - s.k0, mf, md0, mr, cf, cd, lim };
   });
-  return { funcional: linha(r.func_s, 'funcional'), estrutural: linha(r.estrut_s, 'estrutural'), combinada: linha(r.comb_s, 'combinada') };
+  return { funcional: linha(r.func_s, 'funcional'), estrutural: linha(r.estrut_s, 'estrutural'), combinada: linha(fronteirasUniao(a, r), 'combinada') };
 }
 
 /** régua de segmentos: 3 faixas horizontais (funcional, estrutural, resultado) coloridas pela classe */
