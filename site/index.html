@@ -53,7 +53,7 @@
   <section class="pagina ativa" id="pagina-painel">
     <header class="cab-pagina">
       <div>
-        <span class="sobretitulo">Malha rodoviária estadual · trechos PAV, DUP e EOD</span>
+        <span class="sobretitulo">Rodovias pavimentadas estaduais · eixo principal (PAV, DUP e EOD) · mesma base do SGP</span>
         <h1>Painel da malha</h1>
       </div>
     </header>
@@ -68,7 +68,7 @@
         <h2>Composição da malha por situação</h2>
         <div class="barra-composicao" id="barra-composicao" role="img"></div>
         <ul class="legenda-composicao" id="legenda-composicao"></ul>
-        <p class="sub">Só trechos pavimentados (PAV), duplicados (DUP) e em obras de duplicação (EOD) entram no modelo e no painel.</p>
+        <p class="sub">Só trechos estaduais do eixo principal, pavimentados (PAV), duplicados (DUP) ou em obras de duplicação (EOD), entram no modelo e no painel — a mesma base de 12.682 km do SGP.</p>
       </div>
     </section>
 
@@ -163,6 +163,12 @@
           <button class="btn btn-sec" type="button" id="dl-sre-csv">Segmentos (CSV)</button>
         </div>
         <div class="kpis" id="det-kpis"></div>
+        <div class="barra-parametros" data-parametros>
+          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="igg">IGG</option><option value="iri">IRI</option></select></label>
+          <label class="controle"><span class="rot-controle">2 · Parâmetro estrutural</span><select data-p="estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select></label>
+          <label class="controle"><span class="rot-controle">Modelo do PELT (estrutural)</span><select data-p="modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select></label>
+          <p class="sub estado-param" data-p-estado></p>
+        </div>
         <nav class="abas" role="tablist" id="abas-sre">
           <button class="aba ativa" data-aba="modelo" role="tab">Modelo atual</button>
           <button class="aba" data-aba="sens" role="tab">Sensibilidade (grade de penalidades)</button>
@@ -172,7 +178,11 @@
 
         <div class="painel-aba ativo" id="aba-modelo">
           <p class="nota" id="nota-modelo"></p>
-          <div id="graf-perfil" class="graf graf-perfil"></div>
+          <div id="insights-modelo"></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="tit-func-modelo"></span></h3><div id="graf-func-modelo" class="graf"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="tit-estrut-modelo"></span></h3><div id="graf-estrut-modelo" class="graf"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><p class="sub">Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante).</p><div id="graf-regua-modelo" class="graf"></div></div>
+          <details class="detalhes"><summary>Diagnóstico estatístico (caminho CROPS, resíduos e auditoria do modelo gravado)</summary>
           <div class="duas-colunas">
             <div><h3>Diagnóstico CROPS</h3><p class="sub">Nº de quebras estruturais ótimo para cada penalidade (Biswas &amp; Kuna, Fig. 9)</p><div id="graf-crops" class="graf graf-medio"></div></div>
             <div><h3>Q-Q dos resíduos padronizados</h3><p class="sub" id="sub-qq"></p><div id="graf-qq" class="graf graf-medio"></div></div>
@@ -180,6 +190,7 @@
           <h3>Auditoria dos resíduos estruturais</h3>
           <p class="sub">Testes das premissas do PELT normal em cada cenário de penalidade gravado no banco. Verde = premissa atendida.</p>
           <div id="tab-auditoria" class="tabela-rolagem"></div>
+          </details>
         </div>
 
         <div class="painel-aba" id="aba-sens">
@@ -224,6 +235,12 @@
     </header>
 
     <section class="cartao" aria-label="Escolha do SRE">
+      <div class="barra-parametros" data-parametros>
+          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="igg">IGG</option><option value="iri">IRI</option></select></label>
+          <label class="controle"><span class="rot-controle">2 · Parâmetro estrutural</span><select data-p="estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select></label>
+          <label class="controle"><span class="rot-controle">Modelo do PELT (estrutural)</span><select data-p="modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select></label>
+          <p class="sub estado-param" data-p-estado></p>
+        </div>
       <div class="painel-controles">
         <label class="controle largo"><span class="rot-controle">SRE</span>
           <input id="sens-busca" list="sens-lista" placeholder="Digite o código ou a rodovia (ex.: 320EGO0130)" autocomplete="off"></label>
@@ -311,6 +328,9 @@
         <li>
           <h3>Parâmetros</h3>
           <div class="grade-params">
+            <label class="param"><span>1 · Parâmetro funcional</span><select id="rd-func"><option value="igg">IGG</option><option value="iri">IRI</option></select><small>Sinal da segmentação funcional (PELT l2).</small></label>
+            <label class="param"><span>2 · Parâmetro estrutural</span><select id="rd-estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select><small>Raio = 6250 / (2·(D0 − D20)) quando não houver coluna “raio”.</small></label>
+            <label class="param"><span>Modelo do PELT (estrutural)</span><select id="rd-modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select><small>Sugestão: normal para D0 e raio; linear para a ACA.</small></label>
             <label class="param"><span>Penalidade estrutural <button class="ajuda" type="button" title="Penalidade do PELT normal sobre d0: cada quebra custa este valor. O notebook usa o cotovelo da curva “quebras na malha × penalidade” (o ponto a partir do qual aumentar a penalidade quase não remove quebras).">?</button></span>
               <select id="rd-modo-beta">
                 <option value="rede">Cotovelo do seu dataset (como a v8)</option>
@@ -372,8 +392,11 @@
           <button class="aba" data-aba="sens" type="button">Sensibilidade (grade de penalidades)</button>
         </nav>
         <div class="rd-painel painel-aba ativo" id="rd-aba-seg">
-          <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" id="rd-png-sre">Gráfico do SRE (PNG)</button></div>
-          <div class="graf" id="rd-graf-sre"></div>
+          <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" id="rd-png-sre">Gráficos do SRE (3 PNG)</button></div>
+          <div id="rd-insights"></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="rd-tit-func"></span></h3><div class="graf" id="rd-graf-func"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="rd-tit-estrut"></span></h3><div class="graf" id="rd-graf-estrut"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><div class="graf" id="rd-graf-regua"></div></div>
           <div class="explicacao" id="rd-explicacao"></div>
           <h3>Segmentos</h3>
           <div class="tabela-rolagem" id="rd-tabela-sre"></div>

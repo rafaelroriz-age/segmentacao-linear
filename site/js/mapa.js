@@ -4,7 +4,7 @@
 //   perto   → intervalos de 200 m do dataset, dentro dos segmentos homogêneos
 // O SRE selecionado é desenhado por cima com a segmentação escolhida no detalhe (inclusive um passo
 // da análise de sensibilidade).
-import { classificar, criarReferencia, km, num, esc, NOMES_PARAM, UNIDADES, CORES_SITUACAO, NOMES_SITUACAO } from './util.js';
+import { classificar, criarReferencia, camadaBase, km, num, esc, NOMES_PARAM, UNIDADES, CORES_SITUACAO, NOMES_SITUACAO } from './util.js';
 
 const COR_SEG = ['#E8820C', '#2F6FDB'];
 export const ZOOM_SEGMENTOS = 10;
@@ -25,9 +25,7 @@ export class Mapa {
     this.render = L.canvas({ padding: 0.5, tolerance: 6 });
     this.map = L.map(elId, { preferCanvas: true, zoomSnap: 0.25, scrollWheelZoom: false }).setView([-15.9, -49.6], 6.5);
     this.ligarZoomComCtrl(elId);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(this.map);
+    camadaBase(this.map);
     this.camadaMalha = L.layerGroup().addTo(this.map);
     this.camadaSeg = L.layerGroup();
     this.camadaInt = L.layerGroup();
@@ -40,6 +38,34 @@ export class Mapa {
     this.extra = null;           // camada de geometria enviada pelo usuário
     let t = null;
     this.map.on('zoomend moveend', () => { clearTimeout(t); t = setTimeout(() => this.atualizar(), 120); });
+    this.aoMira = () => {};      // km sob o cursor no SRE selecionado (ou null) → gráficos
+    this.marcaMira = null;
+    this.map.on('mousemove', (e) => this.miraDoMapa(e));
+    this.map.on('mouseout', () => { this.mira(null); this.aoMira(null); });
+  }
+
+  // cursor sobre o mapa: km do SRE selecionado mais próximo, se estiver a menos de ~24 px da linha
+  miraDoMapa(e) {
+    if (!this.selecionado || !this.pacote) return;
+    const r = this.ref(this.selecionado, true).kmDe(e.latlng.lat, e.latlng.lng);
+    const mPorPx = 40075016 * Math.cos(e.latlng.lat * Math.PI / 180) / 2 ** (this.map.getZoom() + 8);
+    const k = r.distM / mPorPx <= 24 ? r.km : null;
+    this.mira(k);
+    this.aoMira(k);
+  }
+
+  /** marca o km k do SRE selecionado (null apaga) — mira sincronizada com o perfil longitudinal */
+  mira(k) {
+    if (k === null || k === undefined || !this.selecionado || !this.pacote) {
+      if (this.marcaMira) { this.marcaMira.remove(); this.marcaMira = null; }
+      return;
+    }
+    const p = this.ref(this.selecionado, true).ponto(k);
+    if (!this.marcaMira) {
+      this.marcaMira = L.circleMarker(p, { renderer: this.render, radius: 7, color: cssCor('--texto'), weight: 2, fillColor: cssCor('--destaque'), fillOpacity: 1, interactive: false })
+        .bindTooltip('', { permanent: true, direction: 'top', offset: [0, -8], className: 'dica-sre' }).addTo(this.map);
+    }
+    this.marcaMira.setLatLng(p).setTooltipContent(`<strong>km ${km(k)}</strong>`);
   }
 
   // a roda do mouse só dá zoom com Ctrl pressionado; sem Ctrl a página rola e aparece um aviso

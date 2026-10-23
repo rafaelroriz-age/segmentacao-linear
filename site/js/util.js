@@ -23,6 +23,27 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// tipografia dos gráficos: grotesca neutra na interface, monoespaçada nos números dos eixos
+export const FONTE_UI = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const FONTE_MONO = '"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace';
+
+// ── mapa base cartográfico monocromático (CARTO Positron / Dark Matter), trocado junto com o tema ──
+const midiaEscura = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
+export function temaEscuro() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : !!midiaEscura?.matches;
+}
+export const URL_MAPA_BASE = 'https://basemaps.cartocdn.com';
+export function camadaBase(map) {
+  const url = () => `https://{s}.basemaps.cartocdn.com/${temaEscuro() ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`;
+  const camada = L.tileLayer(url(), {
+    subdomains: 'abcd', maxZoom: 20,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  }).addTo(map);
+  midiaEscura?.addEventListener('change', () => camada.setUrl(url()));
+  return camada;
+}
+
 export function cssVar(nome) {
   return getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
 }
@@ -59,7 +80,21 @@ export function criarReferencia(coords, kmIni, kmFim) {
     const a = coords[i - 1], b = coords[i];
     return [a[1] + (b[1] - a[1]) * t, a[0] + (b[0] - a[0]) * t]; // [lat, lon] para o Leaflet
   }
+  // inverso: km do ponto da linha mais próximo de [lat, lon] e a distância até ela (m)
+  function kmDe(lat, lon) {
+    const kx = Math.cos(lat * Math.PI / 180);
+    let melhor = Infinity, dist = 0;
+    for (let i = 1; i < coords.length; i++) {
+      const ax = coords[i - 1][0] * kx, ay = coords[i - 1][1], bx = coords[i][0] * kx, by = coords[i][1];
+      const dx = bx - ax, dy = by - ay, px = lon * kx, py = lat;
+      const t = dx || dy ? Math.min(Math.max(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0), 1) : 0;
+      const d2 = (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2;
+      if (d2 < melhor) { melhor = d2; dist = acum[i - 1] + t * (acum[i] - acum[i - 1]); }
+    }
+    return { km: kmIni + (dist / total) * ext, distM: Math.sqrt(melhor) * 111320 };
+  }
   return {
+    kmDe,
     ponto: (k) => ponto(pos(k)),
     trecho(k0, k1) {
       const d0 = pos(k0), d1 = pos(k1);

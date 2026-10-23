@@ -1,6 +1,6 @@
 // Gráficos da análise de sensibilidade por SRE: um gráfico por penalidade, resumo dos passos e o
 // gráfico de perfil de uma segmentação calculada no navegador (modelo.js).
-import { cssVar, num, km, TIPOS } from './util.js';
+import { cssVar, FONTE_UI, FONTE_MONO, num, km, TIPOS } from './util.js';
 import { media, desvio } from './estatistica.js';
 import { hexA } from './graficos.js';
 
@@ -20,12 +20,12 @@ const corTipo = (c, t) => ({ funcional: c.func, estrutural: c.estrut, combinada:
 
 function eixo(c, extra = {}) {
   const t = typeof extra.title === 'string' ? { title: { text: extra.title, font: { color: c.texto2, size: 12 } } } : {};
-  return { gridcolor: c.grade, linecolor: c.eixo, zerolinecolor: c.eixo, tickfont: { color: c.mudo, size: 11 }, automargin: true, ...extra, ...t };
+  return { gridcolor: c.grade, linecolor: c.eixo, zerolinecolor: c.eixo, tickfont: { family: FONTE_MONO, color: c.mudo, size: 11 }, automargin: true, ...extra, ...t };
 }
 function base(c, extra = {}) {
   return {
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', separators: ',.',
-    font: { family: '"Sofia Sans Semi Condensed", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: c.texto, size: 12 },
+    font: { family: FONTE_UI, color: c.texto, size: 12 },
     hoverlabel: { bgcolor: c.sup, bordercolor: c.eixo, font: { color: c.texto } },
     legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: { color: c.texto2, size: 12 }, bgcolor: 'rgba(0,0,0,0)' },
     margin: { l: 56, r: 16, t: 16, b: 44 }, hovermode: 'closest', ...extra,

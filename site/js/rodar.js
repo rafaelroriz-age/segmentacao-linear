@@ -3,9 +3,10 @@
 import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
 import { Sensibilidade } from './sensibilidade.js';
+import * as GS from './graficos_seg.js';
 import { baixarPng } from './exportar.js';
 import { carregarIntervalos } from './dados.js';
-import { num, km, esc, baixarCsv, criarReferencia, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
+import { num, km, esc, baixarCsv, criarReferencia, camadaBase, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
 const LIBS = {
   xlsx: new URL('../vendor/xlsx.full.min.js', import.meta.url).href,
@@ -105,7 +106,13 @@ export class Rodar {
     this.$('rd-tipo-mapa').addEventListener('change', () => this.desenharMapa());
     this.$('rd-csv').addEventListener('click', () => this.baixarResultado('csv'));
     this.$('rd-xlsx').addEventListener('click', () => this.baixarResultado('xlsx'));
-    this.$('rd-png-sre').addEventListener('click', () => baixarPng(this.$('rd-graf-sre'), `${this.sreAtual || 'sre'}_segmentacao`, { largura: 1600, altura: 1100 }));
+    this.$('rd-png-sre').addEventListener('click', async () => {
+      for (const [k, id, h] of [['1_funcional', 'rd-graf-func', 620], ['2_estrutural', 'rd-graf-estrut', 620], ['3_resultado', 'rd-graf-regua', 380]]) {
+        await baixarPng(this.$(id), `${this.sreAtual || 'sre'}_${k}`, { largura: 1600, altura: h });
+        await new Promise((ok) => setTimeout(ok, 400));
+      }
+    });
+    this.$('rd-estrut').addEventListener('change', () => { this.$('rd-modelo').value = M.MODELO_PADRAO[this.$('rd-estrut').value]; });
     this.raiz.querySelectorAll('#rd-abas .aba').forEach((b) => b.addEventListener('click', () => {
       this.raiz.querySelectorAll('#rd-abas .aba').forEach((x) => x.classList.toggle('ativa', x === b));
       this.raiz.querySelectorAll('.rd-painel').forEach((pn) => pn.classList.toggle('ativo', pn.id === `rd-aba-${b.dataset.aba}`));
@@ -327,7 +334,8 @@ export class Rodar {
     if (!this.grupos) return;
     const p = this.lerParametros();
     const cfg = {
-      p, modoBeta: this.$('rd-modo-beta').value, betaFixo: Number(this.$('rd-beta-fixo').value), betaMalha: this.betaMalha,
+      p, sinais: { func: this.$('rd-func').value, estrut: this.$('rd-estrut').value, modelo: this.$('rd-modelo').value },
+      modoBeta: this.$('rd-modo-beta').value, betaFixo: Number(this.$('rd-beta-fixo').value), betaMalha: this.betaMalha,
       modoAlpha: this.$('rd-modo-alpha').value, alphaFixo: Number(this.$('rd-alpha-fixo').value), alphaMalha: this.alphaMalha,
     };
     this.trab?.terminate();
@@ -368,8 +376,8 @@ export class Rodar {
       kpi('Segmentos combinados', tot('combinada'), `mediana ${num(medianaComp(res, 'combinada'), 2)} km`),
       kpi('Segmentos estruturais', tot('estrutural'), `mediana ${num(medianaComp(res, 'estrutural'), 2)} km`),
       kpi('Segmentos funcionais', tot('funcional'), `mediana ${num(medianaComp(res, 'funcional'), 2)} km`),
-      kpi('Penalidade estrutural', this.cfg.modoBeta === 'sre' ? 'por SRE' : num(res.betaBase, 2), nomesBeta[this.cfg.modoBeta]),
-      kpi('α_km funcional', num(res.alpha, 4), nomesAlpha[this.cfg.modoAlpha]),
+      kpi('Penalidade estrutural <span class="sem-caixa">β</span>', this.cfg.modoBeta === 'sre' ? 'por SRE' : num(res.betaBase, 2), nomesBeta[this.cfg.modoBeta]),
+      kpi('<span class="sem-caixa">α<sub>km</sub></span> funcional', num(res.alpha, 4), nomesAlpha[this.cfg.modoAlpha]),
     ].join('');
     const nota = [];
     if (res.betaRede !== null) nota.push(`Cotovelo do seu dataset: penalidade ${num(res.betaRede, 2)} (malha: ${num(this.betaMalha, 2)}). Varredura a partir de ln(N mediano) = ${num(res.betaMin, 2)}.`);
@@ -421,7 +429,16 @@ export class Rodar {
     const q = this.res.porSre[s];
     const a = this.grupos[s];
     const r = q.r;
-    GP.grafPasso(this.$('rd-graf-sre'), a, r, { alvo: q.cam ? 'estrutural' : 'funcional', titulo: `SRE ${esc(s)} · penalidade estrutural ${q.beta === null ? '—' : num(q.beta, 2)} · α_km ${num(this.res.alpha, 4)}`, comparar: this.usuario?.[s] });
+    const cfg = r.cfg, limites = this.ctx.rede.classe_limite;
+    this.$('rd-tit-func').textContent = `· ${M.SINAIS_FUNC[cfg.func]} · PELT l2 · α_km ${num(this.res.alpha, 4)} · ${r.func_s.length + 1} segmentos`;
+    this.$('rd-tit-estrut').textContent = q.cam ? `· ${M.SINAIS_ESTRUT[cfg.estrut]} · PELT ${cfg.modelo} · penalidade ${num(q.beta, 2)} · ${r.estrut_s.length + 1} segmentos` : '· sem dados suficientes';
+    GS.grafSinal(this.$('rd-graf-func'), a, cfg.func, r.func_s, { cor: '#7c3aed', altura: 260 });
+    const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
+    GS.grafSinal(this.$('rd-graf-estrut'), a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280 });
+    GS.grafRegua(this.$('rd-graf-regua'), a, r, limites);
+    let ins = GS.insights(a, r, limites, { sre: s });
+    if (this.usuario?.[s]) ins = ins.replace('</p>', ` Sua segmentação × resultado do modelo: F1 ${num(M.f1Quebras(this.usuario[s], r.comb_km, this.res.p.BUFFER_KM).f1, 2)}.</p>`);
+    this.$('rd-insights').innerHTML = ins;
     const linhas = M.explicarPasso(a, { ...r, penalidade: q.beta ?? this.res.alpha }, null, q.cam, q.cam ? 'estrutural' : 'funcional', this.res.p).filter((l) => !l.startsWith('Primeiro passo'));
     const fus = TIPOS.map((t) => (r.fusoes[t].length ? `${t}: ${r.fusoes[t].length} quebra(s) fundida(s) (${r.fusoes[t].map((x) => `km ${num(a.ini[x.quebra], 1)}, p = ${num(x.p, 3)}`).join('; ')})` : null)).filter(Boolean);
     const cot = q.cotovelo ? `Cotovelo próprio do SRE: K = ${q.cotovelo[0]} quebras com penalidade ${num(q.cotovelo[1], 2)}.` : 'O SRE tem poucas soluções no caminho para um cotovelo próprio.';
@@ -440,7 +457,8 @@ export class Rodar {
     this.sens ||= new Sensibilidade(this.$('rd-sens'), { aoMudarPasso: (passo, i, rotulo) => this.desenharMapa(s, passo, rotulo) });
     if (this.sensSre === s) return;
     this.sensSre = s;
-    this.sens.definir({ a: this.grupos[s], cam: q.cam, alphaRef: this.res.alpha, betaRef: q.beta ?? this.res.betaBase, betaMin: this.res.betaMin, sre: s, p: this.res.p });
+    this.sens.definir({ a: this.grupos[s], cam: q.cam, alphaRef: this.res.alpha, betaRef: q.beta ?? this.res.betaBase, betaMin: this.res.betaMin, sre: s, p: this.res.p,
+      cfg: this.res.sinais, limites: this.ctx.rede.classe_limite });
   }
 
   // ── mapa dos resultados ──
@@ -449,7 +467,7 @@ export class Rodar {
     const geo = this.geometrias();
     if (!this.mapa) {
       this.mapa = L.map(this.$('rd-mapa'), { preferCanvas: true, zoomSnap: 0.25 });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(this.mapa);
+      camadaBase(this.mapa);
       this.camada = L.layerGroup().addTo(this.mapa);
       this.render = L.canvas({ padding: 0.5, tolerance: 6 });
     }

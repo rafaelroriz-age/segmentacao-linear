@@ -3,11 +3,12 @@
 // mesmo algoritmo do notebook; serve tanto para SREs da malha quanto para datasets enviados.
 import * as M from './modelo.js';
 import * as GP from './graficos_passos.js';
+import * as GS from './graficos_seg.js';
 import { num, esc, baixarCsv, TIPOS } from './util.js';
 import { baixarExcel, baixarPng } from './exportar.js';
 
 const AJUDA = {
-  alvo: 'Qual penalidade varia. Estrutural: a penalidade do PELT normal sobre d0 (quanto maior, menos quebras estruturais). Funcional: o quociente α_km do PELT l2 sobre o IGG (penalidade = α_km × extensão). A outra fica no valor do modelo atual.',
+  alvo: 'Qual penalidade varia. Estrutural: a penalidade do PELT sobre o parâmetro estrutural escolhido (quanto maior, menos quebras). Funcional: o quociente α_km do PELT l2 sobre o parâmetro funcional (penalidade = α_km × extensão). A outra fica no valor de referência.',
   grade: 'Caminho exato: um passo para cada solução distinta do caminho CROPS, então de um passo para o seguinte a segmentação estrutural sempre muda — nenhum gráfico é repetido. Linear ou logarítmica: n penalidades igualmente espaçadas entre o mínimo e o máximo.',
   maxPassos: 'Limite de passos no caminho exato. SREs longos podem ter dezenas de soluções; acima do limite, os passos são amostrados de forma uniforme, sempre incluindo a referência.',
 };
@@ -29,7 +30,7 @@ export class Sensibilidade {
       <p class="nota" data-r="nota"></p>
       <div class="painel-controles">
         <div class="controle"><span class="rot-controle">Penalidade que varia <button class="ajuda" type="button" title="${esc(AJUDA.alvo)}">?</button></span>
-          <div class="chips" data-r="alvo"><button class="chip ativo" data-v="estrutural">Estrutural (d0)</button><button class="chip" data-v="funcional">Funcional (IGG)</button></div></div>
+          <div class="chips" data-r="alvo"><button class="chip" data-v="funcional">Funcional</button><button class="chip ativo" data-v="estrutural">Estrutural</button></div></div>
         <label class="controle"><span class="rot-controle">Grade <button class="ajuda" type="button" title="${esc(AJUDA.grade)}">?</button></span>
           <select data-r="modo"><option value="caminho">Caminho exato (cada passo muda)</option><option value="linear">Linear</option><option value="log">Logarítmica</option></select></label>
         <label class="controle" data-r="caixa-min"><span class="rot-controle">Mínimo</span><input type="number" step="any" data-r="min"></label>
@@ -46,10 +47,13 @@ export class Sensibilidade {
         <span class="rot-passo" data-r="rot-passo"></span>
       </div>
       <div class="kpis kpis-compactos" data-r="kpis"></div>
-      <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" data-r="png-passo">Gráfico deste passo (PNG)</button><button class="btn btn-sec" type="button" data-r="png-nseg">Segmentos × penalidade (PNG)</button><button class="btn btn-sec" type="button" data-r="png-faixas">Posição das quebras (PNG)</button><button class="btn btn-sec" type="button" data-r="png-todos">Todos os passos (um PNG por penalidade)</button></div>
-      <div class="graf" data-r="graf-passo"></div>
+      <div data-r="insights"></div>
+      <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" data-r="tit-func"></span></h3><div class="graf" data-r="graf-func"></div></div>
+      <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" data-r="tit-estrut"></span></h3><div class="graf" data-r="graf-estrut"></div></div>
+      <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><p class="sub">Cada barra é um segmento. Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante). Passe o mouse para ver os valores.</p><div class="graf" data-r="graf-regua"></div></div>
+      <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" data-r="png-passo">Gráficos deste passo (3 PNG)</button><button class="btn btn-sec" type="button" data-r="png-nseg">Segmentos × penalidade (PNG)</button><button class="btn btn-sec" type="button" data-r="png-faixas">Posição das quebras (PNG)</button><button class="btn btn-sec" type="button" data-r="png-todos">Todos os passos (um PNG por penalidade)</button></div>
       <div class="explicacao" data-r="explicacao"></div>
-      <div class="cab-cartao"><div><h3>Um gráfico por penalidade</h3><p class="sub">Linha azul: média de d0 em cada segmento estrutural; linhas laranja: fronteiras da combinada; verde: quebra nova; cinza: removida. Clique para abrir.</p></div></div>
+      <div class="cab-cartao"><div><h3>Um gráfico por penalidade</h3><p class="sub" data-r="sub-minis"></p></div></div>
       <div class="grade-mini" data-r="minis"></div>
       <div class="duas-colunas">
         <div><h3>Segmentos × penalidade</h3><p class="sub">Clique num ponto para abrir o passo. Pontilhado laranja: modelo atual.</p><div class="graf graf-medio" data-r="graf-nseg"></div></div>
@@ -78,7 +82,13 @@ export class Sensibilidade {
     });
     this.$('[data-r="xlsx"]').addEventListener('click', () => baixarExcel(`${this.ctx.sre || 'sre'}_sensibilidade_${this.alvo}`, { PASSOS: this.linhasTabela() }));
     const nome = (x) => `${this.ctx.sre || 'sre'}_${x}`;
-    this.$('[data-r="png-passo"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-passo"]'), nome(`passo_${this.iSel + 1}_pen_${this.passos[this.iSel].penalidade.toFixed(2)}`)));
+    this.$('[data-r="png-passo"]').addEventListener('click', async () => {
+      const pen = this.passos[this.iSel].penalidade.toFixed(2);
+      for (const [k, r] of [['funcional', 'graf-func'], ['estrutural', 'graf-estrut'], ['resultado', 'graf-regua']]) {
+        await baixarPng(this.$(`[data-r="${r}"]`), nome(`pen_${pen}_${k}`), { largura: 1600, altura: k === 'resultado' ? 380 : 620 });
+        await new Promise((ok) => setTimeout(ok, 400));
+      }
+    });
     this.$('[data-r="png-nseg"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-nseg"]'), nome('segmentos_x_penalidade'), { largura: 1200 }));
     this.$('[data-r="png-faixas"]').addEventListener('click', () => baixarPng(this.$('[data-r="graf-faixas"]'), nome('posicao_das_quebras')));
     this.$('[data-r="png-todos"]').addEventListener('click', () => this.baixarTodos());
@@ -89,9 +99,12 @@ export class Sensibilidade {
     this.raiz.querySelectorAll('.ajuda').forEach((b) => b.addEventListener('click', () => alert(b.title)));
   }
 
-  /** ctx: { a, cam, alphaRef, betaRef, betaMin, sre, p } */
+  /** ctx: { a, cam, alphaRef, betaRef, betaMin, sre, p, cfg, limites (classe_limite) } */
   definir(ctx) {
-    this.ctx = { p: M.PADRAO, ...ctx };
+    this.ctx = { p: M.PADRAO, cfg: M.CFG_PADRAO, limites: [], ...ctx };
+    const { cfg } = this.ctx;
+    this.$('[data-r="alvo"] [data-v="funcional"]').textContent = `Funcional (${M.SINAIS_FUNC[cfg.func]})`;
+    this.$('[data-r="alvo"] [data-v="estrutural"]').textContent = `Estrutural (${M.SINAIS_ESTRUT[cfg.estrut]})`;
     this.parar();
     const temD0 = !!this.ctx.cam;
     this.$('[data-r="alvo"] [data-v="estrutural"]').disabled = !temD0;
@@ -133,7 +146,7 @@ export class Sensibilidade {
     const pens = M.gradePenalidades(this.alvo === 'estrutural' ? cam : null, pRef, {
       modo: this.modo, min, max, n: lerNum('n') || 12, maxPassos: lerNum('maxp') || 30,
     });
-    this.passos = M.passosSensibilidade(a, { alvo: this.alvo, pens, alphaRef, betaRef, cam, p });
+    this.passos = M.passosSensibilidade(a, { alvo: this.alvo, pens, alphaRef, betaRef, cam, p, cfg: this.ctx.cfg });
     this.iRef = this.passos.reduce((j, s, i, arr) => (Math.abs(Math.log(s.penalidade / pRef)) < Math.abs(Math.log(arr[j].penalidade / pRef)) ? i : j), 0);
     const ref = this.passos[this.iRef];
     const tol = p.BUFFER_KM;
@@ -164,7 +177,7 @@ export class Sensibilidade {
         + `<strong>${num(cam.inf[j], 2)} (${num(cam.inf[j] / betaRef, 2)}x)</strong> e <strong>${sup}</strong>. `
         + `O caminho CROPS deste SRE tem ${cam.Ks.length} soluções; a penalidade que zera as quebras é ${num(cam.sup[1], 2)}.`;
     } else if (this.alvo === 'estrutural') {
-      nota.textContent = 'Este SRE não tem d0 suficiente para a segmentação estrutural; só a penalidade funcional pode variar.';
+      nota.textContent = `Este SRE não tem ${M.SINAIS_ESTRUT[this.ctx.cfg.estrut]} suficiente para a segmentação estrutural; só a penalidade funcional pode variar.`;
     } else {
       nota.innerHTML = `<strong>${n} passos</strong> do quociente de penalidade funcional α_km, de ${num(this.passos[0].penalidade, 4)} a ${num(this.passos[n - 1].penalidade, 4)} `
         + `(referência ${num(alphaRef, 4)}). Em cada passo a penalidade do PELT l2 é α_km × extensão, ajustada pelo BIC numa faixa de ±${Math.round(this.ctx.p.MARGEM_PEN * 100)}%; a penalidade estrutural fica em ${num(betaRef, 2)}.`;
@@ -193,7 +206,7 @@ export class Sensibilidade {
   livre(pen) {
     if (!this.passos || !this.passos.length) return;
     const { a, cam, alphaRef, betaRef, p } = this.ctx;
-    const s = M.segmentarSre(a, { alphaFunc: this.alvo === 'funcional' ? pen : alphaRef, beta: this.alvo === 'estrutural' ? pen : betaRef, cam, p });
+    const s = M.segmentarSre(a, { alphaFunc: this.alvo === 'funcional' ? pen : alphaRef, beta: this.alvo === 'estrutural' ? pen : betaRef, cam, p, cfg: this.ctx.cfg });
     const ref = this.passos[this.iRef];
     s.penalidade = pen;
     s.fator = pen / (this.alvo === 'estrutural' ? betaRef : alphaRef);
@@ -215,7 +228,7 @@ export class Sensibilidade {
   }
 
   mostrar(s, ant, { livre, i }, silencioso = false) {
-    const { a, cam, sre } = this.ctx;
+    const { a, cam, sre, cfg, limites } = this.ctx;
     const pTxt = this.alvo === 'estrutural' ? num(s.penalidade, 3) : `α_km ${num(s.penalidade, 4)}`;
     this.$('[data-r="rot-passo"]').innerHTML = livre
       ? `Penalidade <strong>${pTxt}</strong> · ${num(s.fator, 2)}x da referência · passo mais próximo da grade: ${i + 1} de ${this.passos.length}`
@@ -225,10 +238,10 @@ export class Sensibilidade {
     this.$('[data-r="kpis"]').innerHTML = [
       kpi('Penalidade', pTxt, `${num(s.fator, 2)}x a do modelo atual`),
       kpi('Segmentos combinados', s.comb_s.length + 1, igual),
-      kpi('Segmentos estruturais (d0)', cam ? K + 1 : '—', j >= 0 ? `mesma solução de ${num(cam.inf[j], 1)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 1) : '∞'}` : ''),
-      kpi('Segmentos funcionais (IGG)', s.func_s.length + 1, ''),
+      kpi(`Segmentos funcionais (${M.SINAIS_FUNC[cfg.func]})`, s.func_s.length + 1, ''),
+      kpi(`Segmentos estruturais (${M.SINAIS_ESTRUT[cfg.estrut]})`, cam ? K + 1 : '—', j >= 0 ? `mesma solução de ${num(cam.inf[j], 1)} a ${Number.isFinite(cam.sup[j]) ? num(cam.sup[j], 1) : '∞'}` : ''),
     ].join('');
-    GP.grafPasso(this.$('[data-r="graf-passo"]'), a, s, { anterior: ant, alvo: this.alvo, titulo: livre ? `SRE ${esc(sre || '')} · penalidade ${pTxt} (arrastando)` : `SRE ${esc(sre || '')} · passo ${i + 1}/${this.passos.length} · penalidade ${pTxt}` });
+    this.desenharEtapas(s);
     const linhas = M.explicarPasso(a, s, ant, cam, this.alvo, this.ctx.p);
     this.$('[data-r="explicacao"]').innerHTML = `<h3>O que aconteceu neste passo</h3><ul>${linhas.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`;
     this.detalhesFusoes(s);
@@ -237,13 +250,29 @@ export class Sensibilidade {
     this.aoMudarPasso(s, i, this.rotulo(s));
   }
 
+  // os três gráficos (funcional, estrutural, resultado) e os insights do passo
+  desenharEtapas(s) {
+    const { a, cfg, limites, sre } = this.ctx;
+    const robE = GS.robustez(s.estrut_km, this.passos.map((x) => x.estrut_km), this.ctx.p.BUFFER_KM);
+    const robF = GS.robustez(s.func_km, this.passos.map((x) => x.func_km), this.ctx.p.BUFFER_KM);
+    this.$('[data-r="tit-func"]').textContent = `· ${M.SINAIS_FUNC[cfg.func]} · PELT l2 · ${s.func_s.length + 1} segmentos`;
+    this.$('[data-r="tit-estrut"]').textContent = `· ${M.SINAIS_ESTRUT[cfg.estrut]} · PELT ${cfg.modelo} · ${s.estrut_s.length + 1} segmentos`;
+    GS.grafSinal(this.$('[data-r="graf-func"]'), a, cfg.func, s.func_s, { cor: '#7c3aed', rob: this.alvo === 'funcional' ? robF : null, altura: 260 });
+    const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
+    GS.grafSinal(this.$('[data-r="graf-estrut"]'), a, cfg.estrut, s.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', rob: robE, altura: 280 });
+    GS.grafRegua(this.$('[data-r="graf-regua"]'), a, s, limites);
+    this.$('[data-r="insights"]').innerHTML = GS.insights(a, s, limites, { robE, robF, sre });
+  }
+
   rotulo(s) {
     return this.alvo === 'estrutural' ? `combinada, penalidade ${num(s.penalidade, 2)}` : `combinada, α_km ${num(s.penalidade, 4)}`;
   }
 
   detalhesFusoes(s) {
     const { a } = this.ctx;
-    const nomes = { funcional: 'Funcional (Welch no IGG)', estrutural: 'Estrutural (Welch + Brown-Forsythe no d0)', combinada: 'Combinada (d0: média e variância; IGG: média)' };
+    const { cfg } = this.ctx;
+    const f = M.SINAIS_FUNC[cfg.func], e = cfg.estrut === 'raio' ? 'raio' : 'd0';
+    const nomes = { funcional: `Funcional (Welch no ${f})`, estrutural: `Estrutural (Welch + Brown-Forsythe no ${e})`, combinada: `Combinada (${e}: média e variância; ${f}: média)` };
     const blocos = TIPOS.map((t) => {
       const f = s.fusoes[t];
       if (!f.length) return `<p><strong>${nomes[t]}:</strong> nenhuma fusão${t === 'estrutural' && !this.ctx.p.FUNDIR_ESTRUT ? ' (desligada no modelo, como em Biswas & Kuna)' : ''}.</p>`;
@@ -266,17 +295,24 @@ export class Sensibilidade {
   minis() {
     const { a } = this.ctx;
     const caixa = this.$('[data-r="minis"]');
+    const { cfg } = this.ctx;
+    const est = this.alvo === 'estrutural';
+    const chaveS = est ? cfg.estrut : cfg.func;
+    const serieM = est && cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[chaveS];
+    this.$('[data-r="sub-minis"]').textContent = `${est ? M.SINAIS_ESTRUT[cfg.estrut] : M.SINAIS_FUNC[cfg.func]} com a média de cada segmento ${est ? 'estrutural' : 'funcional'}. Clique para abrir.`;
     this.obs?.disconnect();
     caixa.innerHTML = this.passos.map((s, i) => `<button type="button" class="mini ${i === this.iRef ? 'ref' : ''} ${i === this.iSel ? 'sel' : ''}" data-i="${i}">
       <span class="mini-tit">${i + 1}. penalidade ${this.alvo === 'estrutural' ? num(s.penalidade, 2) : num(s.penalidade, 4)}${i === this.iRef ? ' · ref.' : ''}</span>
       <span class="mini-sub">${s.estrut_s.length + 1} estrut. · ${s.func_s.length + 1} func. · ${s.comb_s.length + 1} comb.</span>
       <span class="mini-graf"></span></button>`).join('');
-    caixa.querySelectorAll('.mini').forEach((b) => b.addEventListener('click', () => { this.selecionar(Number(b.dataset.i)); this.$('[data-r="graf-passo"]').scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+    caixa.querySelectorAll('.mini').forEach((b) => b.addEventListener('click', () => { this.selecionar(Number(b.dataset.i)); this.$('[data-r="insights"]').scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
     // desenha só quando o mini-gráfico aparece na tela
     this.obs = new IntersectionObserver((ents) => ents.forEach((e) => {
       if (!e.isIntersecting) return;
       const i = Number(e.target.dataset.i);
-      GP.grafPassoMini(e.target.querySelector('.mini-graf'), a, this.passos[i], { anterior: i > 0 ? this.passos[i - 1] : null, alvo: this.alvo, ref: i === this.iRef });
+      const ps = this.passos[i];
+      GS.grafSinal(e.target.querySelector('.mini-graf'), a, chaveS, est ? ps.estrut_s : ps.func_s,
+        { serie: serieM, modo: est && cfg.modelo === 'linear' ? 'reta' : 'media', altura: 170, cor: est ? null : '#7c3aed' });
       this.obs.unobserve(e.target);
     }), { rootMargin: '200px' });
     caixa.querySelectorAll('.mini').forEach((m) => this.obs.observe(m));
@@ -319,7 +355,7 @@ export class Sensibilidade {
   }
 
   async baixarTodos() {
-    const alvo = this.$('[data-r="graf-passo"]');
+    const alvo = this.$(this.alvo === 'estrutural' ? '[data-r="graf-estrut"]' : '[data-r="graf-func"]');
     const guardado = this.iSel;
     for (let i = 0; i < this.passos.length; i++) {
       this.selecionar(i, true);

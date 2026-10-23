@@ -30,6 +30,14 @@ SAIDA_SITE = os.path.join(RAIZ, 'site', 'dados-local')
 # So entram no modelo e no site os SREs pavimentados: pavimentada, duplicada e em obras de duplicacao.
 # Leito natural, planejada, implantada e em obras de pavimentacao ficam fora (calibracao inclusive).
 SITUACOES = ('PAV', 'DUP', 'EOD')
+# Mesma base do SGP GOINFRA ("rodovias pavimentadas estaduais", 12.683 km): so trechos estaduais e do eixo
+# principal. Sem isso entram trechos federais coincidentes e trechos nao principais (14.132 km).
+JURISDICAO = 'Estadual'
+PRINCIPAL = 's'
+
+
+def filtro_malha(g):
+    return g['situacao'].isin(SITUACOES) & (g['jurisdicao'] == JURISDICAO) & (g['principal'] == PRINCIPAL)
 
 TOL_GEOM_MAPA = 0.0004      # graus (~40 m): malha inteira no mapa
 TOL_GEOM_DETALHE = 0.00003  # graus (~3 m): SRE selecionado, recortado a cada 200 m
@@ -59,8 +67,8 @@ def sha256(path):
 
 
 def sres_elegiveis():
-    g = gpd.read_file(SHAPE_SRE, columns=['sre', 'situacao'], ignore_geometry=True)
-    return g.loc[g['situacao'].isin(SITUACOES), 'sre'].astype(str).tolist()
+    g = gpd.read_file(SHAPE_SRE, columns=['sre', 'situacao', 'jurisdicao', 'principal'], ignore_geometry=True)
+    return g.loc[filtro_malha(g), 'sre'].astype(str).tolist()
 
 
 # ── 1. Roda o modelo a partir do proprio notebook (sem copiar codigo) ─────────
@@ -98,7 +106,7 @@ def rodar_notebook():
             ns['df'] = ns['df'][ns['df']['sre'].isin(eleg)].reset_index(drop=True)
             ns['sres'] = [s for s in ns['sres'] if s in eleg]
             ns['grupos'] = {s: a for s, a in ns['grupos'].items() if s in eleg}
-            log(f'filtro de situacao {SITUACOES}: {len(ns["sres"])} de {antes} SREs, {len(ns["df"])} intervalos')
+            log(f'filtro {SITUACOES} + {JURISDICAO} + principal={PRINCIPAL}: {len(ns["sres"])} de {antes} SREs, {len(ns["df"])} intervalos')
     shutil.rmtree(tmp, ignore_errors=True)
     if ns['SENS_ALVO'] != 'estrutural':
         log("AVISO: SENS_ALVO != 'estrutural'; o site descreve a sensibilidade do beta estrutural")
@@ -131,17 +139,27 @@ def montar_tabelas(ns):
     FATORES, PLOTS, I_REF = ns['FATORES'], ns['PLOTS'], ns['I_REF']
 
     # intervalos de 200 m (sinais usados pelo modelo; *_obs = medido antes da interpolacao)
-    bruto = pd.read_excel(ns['INPUT_FILE'], usecols=lambda c: c in ('sre', 'sre_segmento', 'igg', 'iri_medio'))
+    bruto = pd.read_excel(ns['INPUT_FILE'], usecols=lambda c: c in ('sre', 'sre_segmento', 'igg', 'iri_medio', 'd0', 'd20'))
     bruto['sre'] = bruto['sre'].astype(str)
+    for c in ('d0', 'd20'):
+        bruto[c] = pd.to_numeric(bruto[c], errors='coerce')
     obs = bruto.groupby(['sre', 'sre_segmento']).agg(igg_obs=('igg', lambda s: s.notna().any()),
-                                                     iri_obs=('iri_medio', lambda s: s.notna().any())).reset_index()
+                                                     iri_obs=('iri_medio', lambda s: s.notna().any()),
+                                                     d0_bruto=('d0', 'mean'), d20=('d20', 'mean')).reset_index()
     itv = df.merge(obs, on=['sre', 'sre_segmento'], how='left', validate='1:1')
     itv['ordem'] = itv.groupby('sre').cumcount()
-    intervalo = itv[['sre', 'ordem', 'km_inicial', 'km_final', 'd0', 'igg', 'iri', 'aca',
-                     'd0_obs', 'igg_obs', 'iri_obs']].copy()
-    for c in ('igg_obs', 'iri_obs'):
+    # raio de curvatura (DNER-ME 024): R = 6250 / (2 (D0 - D20)), em m, so onde D0 e D20 foram medidos e D0 > D20;
+    # o resto e interpolado ao longo do SRE como os demais sinais do notebook
+    dif = itv['d0_bruto'] - itv['d20']
+    itv['raio'] = np.where(dif > 0, 6250.0 / (2.0 * dif), np.nan)
+    itv['raio_obs'] = itv['raio'].notna()
+    for c in ('raio', 'd20'):
+        itv[c] = itv.groupby('sre')[c].transform(lambda s: s.interpolate(limit_direction='both').fillna(s.median()))
+    intervalo = itv[['sre', 'ordem', 'km_inicial', 'km_final', 'd0', 'igg', 'iri', 'aca', 'd20', 'raio',
+                     'd0_obs', 'igg_obs', 'iri_obs', 'raio_obs']].copy()
+    for c in ('igg_obs', 'iri_obs', 'raio_obs'):
         intervalo[c] = intervalo[c].fillna(False).astype(bool)
-    for c, n in (('km_inicial', 3), ('km_final', 3), ('d0', 2), ('igg', 2), ('iri', 3), ('aca', 2)):
+    for c, n in (('km_inicial', 3), ('km_final', 3), ('d0', 2), ('igg', 2), ('iri', 3), ('aca', 2), ('d20', 2), ('raio', 1)):
         intervalo[c] = intervalo[c].round(n)
 
     # segmentos, cenarios e auditoria por fator (fator 1 = v8)
@@ -181,7 +199,7 @@ def montar_tabelas(ns):
     # SREs: atributos do shape + medias ponderadas por comprimento (so valores medidos) + classes
     g = gpd.read_file(SHAPE_SRE)
     g['sre'] = g['sre'].astype(str)
-    g = g[g['situacao'].isin(SITUACOES)]
+    g = g[filtro_malha(g)]
     comp = (intervalo['km_final'] - intervalo['km_inicial']).clip(lower=0)
     medias = {}
     for p, col, ob in (('iri', 'iri', 'iri_obs'), ('igg', 'igg', 'igg_obs'), ('d0', 'd0', 'd0_obs')):
@@ -269,7 +287,7 @@ def montar_tabelas(ns):
         'beta_rede': round(ns['BETA_REDE'], 4), 'beta_min': round(ns['BETA_MIN_EF'], 4),
         'beta_bic': round(ns['BETA_BIC'], 4), 'alpha_km_func': round(ns['ALPHA_KM_FUNC_OPT'], 6),
         'min_size': ns['MIN_SIZE'], 'cv_limite': ns['CV_LIMITE'], 'sens_tol_km': ns['SENS_TOL_KM'],
-        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES),
+        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES), 'jurisdicao': JURISDICAO, 'principal': PRINCIPAL,
     }
     meta_df = pd.DataFrame([{'chave': k, 'valor': json.dumps(v)} for k, v in meta.items()])
 

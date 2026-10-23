@@ -71,8 +71,8 @@ export async function carregarIntervalos(sres, geom = false) {
     const parte = sres.slice(i, i + 300);
     const r = await rpc('intervalos_sres', { p_sres: parte, p_geom: geom });
     parte.forEach((s) => { out.intervalos[s] = []; });
-    for (const [sre, km_inicial, km_final, d0, igg, iri, aca, d0_obs, igg_obs, iri_obs] of r.intervalos) {
-      out.intervalos[sre].push({ km_inicial, km_final, d0, igg, iri, aca, d0_obs, igg_obs, iri_obs });
+    for (const [sre, km_inicial, km_final, d0, igg, iri, aca, d0_obs, igg_obs, iri_obs, raio, raio_obs] of r.intervalos) {
+      out.intervalos[sre].push({ km_inicial, km_final, d0, igg, iri, aca, d0_obs, igg_obs, iri_obs, raio, raio_obs: !!raio_obs });
     }
     Object.assign(out.geom, r.geom || {});
   }

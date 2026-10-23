@@ -32,10 +32,22 @@ export const PADRAO = {
   BETA_MAX_QUANTIL: 0.9,
 };
 
-const MIN_SIZE_CUSTO = { l2: 1, normal: 2 };
+const MIN_SIZE_CUSTO = { l2: 1, normal: 2, linear: 3 };
+
+/** sinais que o usuário pode escolher e o modelo PELT padrão de cada um */
+export const SINAIS_FUNC = { igg: 'IGG', iri: 'IRI' };
+export const SINAIS_ESTRUT = { d0: 'D0 (deflexão)', raio: 'Raio de curvatura', aca: 'Diferença acumulada (ACA)' };
+export const MODELOS = {
+  normal: 'normal — muda a média ou a variabilidade',
+  l2: 'l2 — muda só a média',
+  linear: 'linear — muda a inclinação (tendência)',
+};
+export const MODELO_PADRAO = { d0: 'normal', raio: 'normal', aca: 'linear' };
+export const CFG_PADRAO = { func: 'igg', estrut: 'd0', modelo: 'normal' };
+export const ehPadrao = (cfg) => !cfg || (cfg.func === 'igg' && cfg.estrut === 'd0' && cfg.modelo === 'normal');
 
 // ── PELT ─────────────────────────────────────────────────────────────────────
-export function prefixos(y) {
+export function prefixos(y, linear = false) {
   const m = E.media(y);
   const n = y.length;
   const S1 = new Float64Array(n + 1), S2 = new Float64Array(n + 1);
@@ -44,7 +56,17 @@ export function prefixos(y) {
     S1[i + 1] = S1[i] + v;
     S2[i + 1] = S2[i] + v * v;
   }
-  return [S1, S2];
+  if (!linear) return [S1, S2];
+  // custo linear: somas de x, x² e x·y (x = posição centrada no SRE)
+  const Sx = new Float64Array(n + 1), Sxx = new Float64Array(n + 1), Sxy = new Float64Array(n + 1);
+  const xm = (n - 1) / 2;
+  for (let i = 0; i < n; i++) {
+    const x = i - xm, v = y[i] - m;
+    Sx[i + 1] = Sx[i] + x;
+    Sxx[i + 1] = Sxx[i] + x * x;
+    Sxy[i + 1] = Sxy[i] + x * v;
+  }
+  return [S1, S2, Sx, Sxx, Sxy];
 }
 
 function custo(modelo, t, e, P, piso) {
@@ -53,6 +75,12 @@ function custo(modelo, t, e, P, piso) {
   const s1 = S1[e] - S1[t];
   const sq = S2[e] - S2[t];
   if (modelo === 'l2') return sq - (s1 * s1) / n;
+  if (modelo === 'linear') {
+    // soma dos quadrados dos resíduos da reta ajustada no segmento
+    const sx = P[2][e] - P[2][t], sxx = P[3][e] - P[3][t], sxy = P[4][e] - P[4][t];
+    const vyy = sq - (s1 * s1) / n, vxx = sxx - (sx * sx) / n, vxy = sxy - (sx * s1) / n;
+    return Math.max(vxx > 1e-12 ? vyy - (vxy * vxy) / vxx : vyy, 0);
+  }
   const v = Math.max(sq / n - (s1 / n) ** 2, 0);
   return n * Math.log(v + piso);
 }
@@ -62,7 +90,7 @@ function custo(modelo, t, e, P, piso) {
 export function pelt(y, modelo, minSize, jump, pen, P = null, piso = 0, exato = false) {
   const n = y.length;
   minSize = Math.max(minSize | 0, MIN_SIZE_CUSTO[modelo]);
-  P = P || prefixos(y);
+  P = P || prefixos(y, modelo === 'linear');
   const F = new Float64Array(n + 1).fill(Infinity);
   F[0] = 0;
   const prev = new Int32Array(n + 1);
@@ -109,14 +137,14 @@ export function pisoVariancia(d0, p = PADRAO) {
 }
 
 // ── CROPS (Haynes, Eckley & Fearnhead, 2017): todas as segmentações ótimas do PELT 'normal' ──
-export function cropsNormal(y, betaMin, p = PADRAO, piso = 1e-9) {
+export function crops(y, betaMin, p = PADRAO, piso = 1e-9, modelo = 'normal') {
   const N = y.length;
-  const P = prefixos(y);
-  const sols = new Map([[0, [custoTotal('normal', [N], P, piso), [N]]]]);
-  if (N < 2 * Math.max(p.MIN_SIZE, MIN_SIZE_CUSTO.normal)) return sols;
+  const P = prefixos(y, modelo === 'linear');
+  const sols = new Map([[0, [custoTotal(modelo, [N], P, piso), [N]]]]);
+  if (N < 2 * Math.max(p.MIN_SIZE, MIN_SIZE_CUSTO[modelo])) return sols;
   const run = (beta) => {
-    const bk = pelt(y, 'normal', p.MIN_SIZE, p.JUMP, beta, P, piso, p.PELT_EXATO);
-    const K = bk.length - 1, Q = custoTotal('normal', bk, P, piso);
+    const bk = pelt(y, modelo, p.MIN_SIZE, p.JUMP, beta, P, piso, p.PELT_EXATO);
+    const K = bk.length - 1, Q = custoTotal(modelo, bk, P, piso);
     if (!sols.has(K) || Q < sols.get(K)[0] - 1e-9) sols.set(K, [Q, bk]);
     return [K, sols.get(K)[0]];
   };
@@ -148,14 +176,50 @@ export function cropsNormal(y, betaMin, p = PADRAO, piso = 1e-9) {
   return new Map(hull.map(([K]) => [K, sols.get(K)]));
 }
 
+export const cropsNormal = (y, betaMin, p = PADRAO, piso = 1e-9) => crops(y, betaMin, p, piso, 'normal');
+
+// desvio do ruído: MAD das diferenças sucessivas (robusto a degraus), para pôr l2/linear numa escala comum
+function escalaRuido(v) {
+  const d = [];
+  for (let i = 1; i < v.length; i++) d.push(Math.abs(v[i] - v[i - 1]));
+  const s = d.length ? E.mediana(d) / 0.6745 / Math.SQRT2 : 0;
+  return s > 1e-9 ? s : (v.length > 1 ? E.desvio(v) : 1) || 1;
+}
+
+/** série estrutural que o PELT recebe. normal: valor bruto (raio em log, por ser assimétrico);
+ *  l2 e linear: dividida pelo desvio do ruído, para a penalidade ficar em "variâncias de ruído". */
+export function sinalEstrutural(a, cfg = CFG_PADRAO) {
+  let y;
+  if (cfg.estrut === 'raio') y = a.raio.map((v) => (v > 0 ? Math.log(v) : NaN));
+  else if (cfg.estrut === 'aca') {
+    if (a.aca && a.aca.every(Number.isFinite)) y = a.aca;
+    else { const m = E.media(a.d0); let acc = 0; y = a.d0.map((v) => (acc += v - m)); }
+  } else y = a.d0;
+  if (cfg.modelo === 'normal') return y;
+  const base = cfg.estrut === 'aca' ? a.d0 : y;   // a ACA é a soma do d0: o ruído vem do d0
+  const esc = escalaRuido(base);
+  return y.map((v) => v / esc);
+}
+
+/** série usada nos testes de fusão e nas médias do gráfico estrutural (o que o engenheiro lê) */
+export const serieTesteEstrut = (a, cfg = CFG_PADRAO) => (cfg.estrut === 'raio' ? a.raio : a.d0);
+export const obsEstrut = (a, cfg = CFG_PADRAO) => (cfg.estrut === 'raio' ? a.raio_obs : a.d0_obs);
+
+export function temEstrut(a, cfg = CFG_PADRAO, p = PADRAO) {
+  const s = cfg.estrut === 'raio' ? a.raio : a.d0;
+  return !!s && s.length >= 2 * Math.max(p.MIN_SIZE, MIN_SIZE_CUSTO[cfg.modelo]) && s.every((v) => Number.isFinite(v) && (cfg.estrut !== 'raio' || v > 0));
+}
+
 /** caminho CROPS do SRE: Ks crescente, custo Q e faixa [inf, sup] de penalidade em que cada solução é ótima */
-export function caminhoSre(a, betaMin, p = PADRAO) {
-  const path = cropsNormal(a.d0, betaMin, p, pisoVariancia(a.d0, p));
+export function caminhoSre(a, betaMin, p = PADRAO, cfg = CFG_PADRAO) {
+  const y = sinalEstrutural(a, cfg);
+  const piso = cfg.modelo === 'normal' ? pisoVariancia(y, p) : 0;
+  const path = crops(y, betaMin, p, piso, cfg.modelo);
   const Ks = [...path.keys()].sort((x, y) => x - y);
   const Q = Ks.map((k) => path.get(k)[0]);
   const sup = [Infinity, ...Ks.slice(1).map((k, i) => (Q[i] - Q[i + 1]) / (k - Ks[i]))];
   const inf = [...sup.slice(1), betaMin];
-  return { Ks, Q, inf, sup, bkps: Object.fromEntries(Ks.map((k) => [k, path.get(k)[1]])) };
+  return { Ks, Q, inf, sup, bkps: Object.fromEntries(Ks.map((k) => [k, path.get(k)[1]])), cfg: { ...cfg } };
 }
 
 export function kOtimo(cam, beta) {
@@ -223,10 +287,11 @@ function bicL2(X, bkps) {
 
 export const extensao = (a, lo, hi) => (hi < a.ini.length ? a.ini[hi] : Math.max(...a.fim.slice(lo, hi))) - Math.min(...a.ini.slice(lo, hi));
 
-export function segmentarFuncional(a, alpha, p = PADRAO) {
-  const N = a.igg.length;
+export function segmentarFuncional(a, alpha, p = PADRAO, sinal = 'igg') {
+  const serie = a[sinal];
+  const N = serie.length;
   const pens = bandaPenalidades(alpha * extensao(a, 0, N), p.MARGEM_PEN, p.N_CAND_PEN);
-  const Xs = N > 1 ? padronizar(a.igg) : [...a.igg];
+  const Xs = N > 1 ? padronizar(serie) : [...serie];
   const P = prefixos(Xs);
   let melhor = null;
   const candidatos = [];
@@ -278,9 +343,9 @@ export function fundirTestes(inicios, series, N, alpha, registro = null) {
   return fr;
 }
 
-export function segmentarEstruturalTrecho(d0, lo, hi, beta, piso, p = PADRAO) {
-  if (hi - lo < 2 * p.MIN_SIZE) return [];
-  const bk = pelt(d0.slice(lo, hi), 'normal', p.MIN_SIZE, p.JUMP, beta, null, piso, p.PELT_EXATO);
+export function segmentarEstruturalTrecho(y, lo, hi, beta, piso, p = PADRAO, modelo = 'normal') {
+  if (hi - lo < 2 * Math.max(p.MIN_SIZE, MIN_SIZE_CUSTO[modelo])) return [];
+  const bk = pelt(y.slice(lo, hi), modelo, p.MIN_SIZE, p.JUMP, beta, null, piso, p.PELT_EXATO);
   return bk.slice(0, -1).map((b) => lo + b);
 }
 
@@ -400,56 +465,61 @@ export function auditarResiduos(y, obs, inicios, p = PADRAO) {
 }
 
 // ── segmentação de um SRE (funcional, estrutural e combinada) ────────────────
-/** opts: { alphaFunc, beta, cam (caminho CROPS ou null), p, auditar } */
-export function segmentarSre(a, { alphaFunc, beta, cam, p = PADRAO, auditar = true }) {
+/** opts: { alphaFunc, beta, cam (caminho CROPS ou null), p, auditar, cfg: {func, estrut, modelo} } */
+export function segmentarSre(a, { alphaFunc, beta, cam, p = PADRAO, auditar = true, cfg = null }) {
+  cfg = cfg || cam?.cfg || CFG_PADRAO;
   const N = a.ini.length;
   const ini = a.ini;
   const kmMin = Math.min(...ini), kmMax = Math.max(...a.fim);
-  const temIgg = N > 0 && a.igg.every(Number.isFinite);
+  const sFunc = a[cfg.func] || [];
+  const temIgg = N > 0 && sFunc.length === N && sFunc.every(Number.isFinite);
   const temD0 = !!cam;
-  const piso = pisoVariancia(a.d0, p);
+  const yEst = temD0 ? sinalEstrutural(a, cfg) : a.d0;
+  const teste = serieTesteEstrut(a, cfg);
+  const piso = cfg.modelo === 'normal' ? pisoVariancia(yEst, p) : 0;
   const fusoes = { funcional: [], estrutural: [], combinada: [] };
 
   // funcional
   let funcS = [], penFunc = null, candFunc = [];
   if (temIgg) {
-    const f = segmentarFuncional(a, alphaFunc, p);
+    const f = segmentarFuncional(a, alphaFunc, p, cfg.func);
     funcS = f.quebras; penFunc = f.pen; candFunc = f.candidatos;
   }
   const nFuncBruto = funcS.length;
-  if (p.FUNDIR_FUNC && temIgg) funcS = fundirTestes(funcS, [[a.igg, false]], N, p.ALPHA_TESTE, fusoes.funcional);
+  if (p.FUNDIR_FUNC && temIgg) funcS = fundirTestes(funcS, [[sFunc, false]], N, p.ALPHA_TESTE, fusoes.funcional);
 
   // estrutural: solução do caminho CROPS na penalidade escolhida
   let estrutS = [];
   if (temD0) estrutS = cam.bkps[kOtimo(cam, beta)].slice(0, -1).map(Number);
   const nEstrutBruto = estrutS.length;
-  if (p.FUNDIR_ESTRUT && temD0) estrutS = fundirTestes(estrutS, [[a.d0, true]], N, p.ALPHA_TESTE, fusoes.estrutural);
+  if (p.FUNDIR_ESTRUT && temD0) estrutS = fundirTestes(estrutS, [[teste, true]], N, p.ALPHA_TESTE, fusoes.estrutural);
 
   // combinada em 2 etapas
   let subS = estrutS;
   if (temD0 && p.SUBSEGMENTAR_COMB) {
     const lims = [0, ...funcS, N];
     subS = [];
-    for (let i = 0; i < lims.length - 1; i++) subS.push(...segmentarEstruturalTrecho(a.d0, lims[i], lims[i + 1], beta, piso, p));
+    for (let i = 0; i < lims.length - 1; i++) subS.push(...segmentarEstruturalTrecho(yEst, lims[i], lims[i + 1], beta, piso, p, cfg.modelo));
   }
   const funcKm = funcS.map((s) => ini[s]);
   const combKm = reconciliarCombinada(funcKm, subS.map((s) => ini[s]), kmMin, kmMax, p);
   let combS = combKm.map((k) => searchsorted(ini, k));
   const nCombBruto = combS.length;
   if (p.FUNDIR_COMB) {
-    const series = [...(temD0 ? [[a.d0, true]] : []), ...(temIgg ? [[a.igg, false]] : [])];
+    const series = [...(temD0 ? [[teste, true]] : []), ...(temIgg ? [[sFunc, false]] : [])];
     if (series.length) combS = fundirTestes(combS, series, N, p.ALPHA_TESTE, fusoes.combinada);
   }
 
   let aud = { n_residuos: 0, n_segmentos: 1 }, z = null;
-  if (temD0 && auditar && a.d0_obs) ({ aud, z } = auditarResiduos(a.d0, a.d0_obs, estrutS, p));
+  const obs = obsEstrut(a, cfg);
+  if (temD0 && auditar && obs) ({ aud, z } = auditarResiduos(teste, obs, estrutS, p));
 
   return {
     func_s: funcS, estrut_s: estrutS, comb_s: combS, sub_s: subS,
     func_km: funcKm, estrut_km: estrutS.map((s) => ini[s]), comb_km: combS.map((s) => ini[s]),
     pen_func: penFunc, cand_func: candFunc, beta: temD0 ? beta : null, alpha: alphaFunc,
     bruto: { funcional: nFuncBruto, estrutural: nEstrutBruto, combinada: nCombBruto }, fusoes,
-    aud, z, km_min: kmMin, km_max: kmMax, piso,
+    aud, z, km_min: kmMin, km_max: kmMax, piso, cfg: { ...cfg },
     segmentos: () => [
       ...montarSegmentos('funcional', funcS, a, kmMin, kmMax, p),
       ...montarSegmentos('estrutural', estrutS, a, kmMin, kmMax, p),
@@ -487,11 +557,11 @@ export function gradePenalidades(cam, betaRef, { modo = 'caminho', min, max, n =
 }
 
 /** segmentações do SRE para cada penalidade. alvo 'estrutural' varia β; 'funcional' varia α_km. */
-export function passosSensibilidade(a, { alvo = 'estrutural', pens, alphaRef, betaRef, cam, p = PADRAO }) {
+export function passosSensibilidade(a, { alvo = 'estrutural', pens, alphaRef, betaRef, cam, p = PADRAO, cfg = null }) {
   return pens.map((pen) => {
     const alpha = alvo === 'funcional' ? pen : alphaRef;
     const beta = alvo === 'estrutural' ? pen : betaRef;
-    const r = segmentarSre(a, { alphaFunc: alpha, beta, cam, p });
+    const r = segmentarSre(a, { alphaFunc: alpha, beta, cam, p, cfg });
     r.penalidade = pen;
     r.fator = alvo === 'estrutural' ? pen / betaRef : pen / alphaRef;
     return r;
@@ -507,20 +577,27 @@ function desc(a, serie, lo, hi, un) {
 }
 const fmt = (v, c) => (v === null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c }));
 
+const DESC_MODELO = {
+  normal: 'Q = soma de n·log(variância) dos segmentos (−2 × log-verossimilhança)',
+  l2: 'Q = soma dos quadrados dos desvios em torno da média de cada segmento',
+  linear: 'Q = soma dos quadrados dos desvios em torno da reta de cada segmento',
+};
+
 export function explicarPasso(a, passo, anterior, cam, alvo, p = PADRAO) {
+  const cfg = passo.cfg || cam?.cfg || CFG_PADRAO;
   const chave = alvo === 'estrutural' ? 'estrut_s' : 'func_s';
-  const [serie, un] = alvo === 'estrutural' ? [a.d0, ''] : [a.igg, ''];
+  const [serie, un] = alvo === 'estrutural' ? [serieTesteEstrut(a, cfg), cfg.estrut === 'raio' ? ' m' : ''] : [a[cfg.func], ''];
   const pen = passo.penalidade;
   const L = [];
   if (alvo === 'estrutural') {
-    L.push(`O PELT normal sobre d0 minimiza Q + penalidade × K, com Q = soma de n·log(variância) dos segmentos (−2 × log-verossimilhança) e K = nº de quebras.`);
+    L.push(`O PELT ${cfg.modelo} sobre ${SINAIS_ESTRUT[cfg.estrut]} minimiza Q + penalidade × K, com ${DESC_MODELO[cfg.modelo]} e K = nº de quebras.`);
     if (cam && cam.Ks.length > 1) {
       const K = passo.estrut_s.length;
       const j = cam.Ks.indexOf(K);
       if (j >= 0) L.push(`Com penalidade ${fmt(pen, 2)}, a melhor solução tem K = ${K} quebras (Q = ${fmt(cam.Q[j], 1)}); ela continua ótima para penalidades entre ${fmt(cam.inf[j], 2)} e ${Number.isFinite(cam.sup[j]) ? fmt(cam.sup[j], 2) : '∞'}.`);
     }
   } else {
-    L.push(`O PELT l2 sobre o IGG padronizado minimiza a soma dos quadrados + penalidade × K; a penalidade é α_km × extensão, escolhida pelo BIC numa faixa de ±${Math.round(p.MARGEM_PEN * 100)}% (α_km = ${fmt(pen, 4)}; penalidade escolhida = ${fmt(passo.pen_func, 2)}).`);
+    L.push(`O PELT l2 sobre o ${SINAIS_FUNC[cfg.func]} padronizado minimiza a soma dos quadrados + penalidade × K; a penalidade é α_km × extensão, escolhida pelo BIC numa faixa de ±${Math.round(p.MARGEM_PEN * 100)}% (α_km = ${fmt(pen, 4)}; penalidade escolhida = ${fmt(passo.pen_func, 2)}).`);
   }
   if (!anterior) {
     L.push('Primeiro passo: penalidade mais fraca da sequência, maior número de quebras.');
@@ -579,16 +656,19 @@ export function prepararDataset(linhas) {
     if (!sre) continue;
     const ki = num(l.km_inicial), kf = num(l.km_final);
     const chave = temSeg ? `${sre}\u0000${l.sre_segmento}` : `${sre}\u0000${ki}\u0000${kf}`;
-    if (!grupos.has(chave)) grupos.set(chave, { sre, ki: [], kf: [], igg: [], iri: [], d0: [] });
+    if (!grupos.has(chave)) grupos.set(chave, { sre, ki: [], kf: [], igg: [], iri: [], d0: [], raio: [] });
     const g = grupos.get(chave);
     g.ki.push(ki); g.kf.push(kf); g.igg.push(num(l.igg)); g.iri.push(num(l.iri_medio ?? l.iri)); g.d0.push(num(l.d0));
+    // raio: coluna própria se existir; senão R = 6250 / (2 (D0 − D20)) quando D0 > D20
+    const r = num(l.raio), d20 = num(l.d20), d0 = num(l.d0);
+    g.raio.push(Number.isFinite(r) && r > 0 ? r : Number.isFinite(d0) && Number.isFinite(d20) && d0 > d20 ? 6250 / (2 * (d0 - d20)) : NaN);
   }
   const mediaFin = (v) => { const f = v.filter(Number.isFinite); return f.length ? E.media(f) : NaN; };
   const porSre = new Map();
   for (const g of grupos.values()) {
     const ki = g.ki.filter(Number.isFinite), kf = g.kf.filter(Number.isFinite);
     if (!ki.length || !kf.length) continue;
-    const r = { ini: Math.min(...ki), fim: Math.max(...kf), igg: mediaFin(g.igg), iri: mediaFin(g.iri), d0: mediaFin(g.d0) };
+    const r = { ini: Math.min(...ki), fim: Math.max(...kf), igg: mediaFin(g.igg), iri: mediaFin(g.iri), d0: mediaFin(g.d0), raio: mediaFin(g.raio) };
     if (!porSre.has(g.sre)) porSre.set(g.sre, []);
     porSre.get(g.sre).push(r);
   }
@@ -596,8 +676,8 @@ export function prepararDataset(linhas) {
   for (const [sre, rs] of [...porSre.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) {
     rs.sort((x, y) => x.ini - y.ini);
     const a = { ini: rs.map((r) => r.ini), fim: rs.map((r) => r.fim), d0_obs: rs.map((r) => Number.isFinite(r.d0)),
-      igg_obs: rs.map((r) => Number.isFinite(r.igg)), iri_obs: rs.map((r) => Number.isFinite(r.iri)) };
-    for (const c of ['igg', 'iri', 'd0']) a[c] = interpolar(rs.map((r) => r[c]));
+      igg_obs: rs.map((r) => Number.isFinite(r.igg)), iri_obs: rs.map((r) => Number.isFinite(r.iri)), raio_obs: rs.map((r) => Number.isFinite(r.raio)) };
+    for (const c of ['igg', 'iri', 'd0', 'raio']) a[c] = interpolar(rs.map((r) => r[c]));
     a.centro = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
     const m = a.d0.every(Number.isFinite) ? E.media(a.d0) : NaN;
     let acc = 0;
@@ -624,11 +704,11 @@ function interpolar(v) {
 
 /** arrays do modelo a partir dos intervalos de um SRE do banco (dados_sre) */
 export function arraysDoBanco(intervalos) {
-  const a = { ini: [], fim: [], d0: [], igg: [], iri: [], aca: [], d0_obs: [], igg_obs: [], iri_obs: [] };
+  const a = { ini: [], fim: [], d0: [], igg: [], iri: [], aca: [], raio: [], d0_obs: [], igg_obs: [], iri_obs: [], raio_obs: [] };
   for (const i of intervalos) {
     a.ini.push(i.km_inicial); a.fim.push(i.km_final);
-    a.d0.push(i.d0 ?? NaN); a.igg.push(i.igg ?? NaN); a.iri.push(i.iri ?? NaN); a.aca.push(i.aca ?? NaN);
-    a.d0_obs.push(!!i.d0_obs); a.igg_obs.push(!!i.igg_obs); a.iri_obs.push(!!i.iri_obs);
+    a.d0.push(i.d0 ?? NaN); a.igg.push(i.igg ?? NaN); a.iri.push(i.iri ?? NaN); a.aca.push(i.aca ?? NaN); a.raio.push(i.raio ?? NaN);
+    a.d0_obs.push(!!i.d0_obs); a.igg_obs.push(!!i.igg_obs); a.iri_obs.push(!!i.iri_obs); a.raio_obs.push(!!i.raio_obs);
   }
   a.centro = a.ini.map((v, i) => 0.5 * (v + a.fim[i]));
   return a;
@@ -649,16 +729,20 @@ export function betaMinimo(grupos, p = PADRAO) {
 export function diagnosticoRede(caminhos, betaMin, p = PADRAO) {
   const zeros = Object.values(caminhos).filter((c) => c.Ks.length > 1).map((c) => c.sup[1]);
   const bMax = zeros.length ? E.quantil(zeros, p.BETA_MAX_QUANTIL) : 10 * betaMin;
-  const grid = E.linspace(betaMin, Math.max(bMax, betaMin * 1.01), p.N_GRID_BETA);
+  const hi = Math.max(bMax, betaMin * 1.01);
+  // grade linear como no notebook; quando a curva cobre muitas ordens de grandeza (ex.: ACA), o cotovelo
+  // numa grade linear fica achatado no fim da curva, então usa grade e cotovelo em escala logarítmica
+  const log = hi / betaMin > 50;
+  const grid = log ? E.linspace(Math.log(betaMin), Math.log(hi), p.N_GRID_BETA).map(Math.exp) : E.linspace(betaMin, hi, p.N_GRID_BETA);
   const K = grid.map(() => 0);
   for (const c of Object.values(caminhos)) grid.forEach((b, i) => { K[i] += kOtimo(c, b); });
-  return { grid, K, betaRede: grid[kneedleIdx(grid, K)] };
+  return { grid, K, betaRede: grid[kneedleIdx(log ? grid.map(Math.log) : grid, K)], escalaLog: log };
 }
 
 /** calibração funcional: α_km que minimiza a soma do BIC numa amostra estratificada por comprimento */
-export function calibrarFuncional(grupos, p = PADRAO, grade = null) {
+export function calibrarFuncional(grupos, p = PADRAO, grade = null, sinal = 'igg') {
   grade = grade || Array.from({ length: 29 }, (_, i) => Math.round((0.05 + 0.0125 * i) * 1e4) / 1e4);
-  let cand = Object.entries(grupos).filter(([, a]) => a.igg.every(Number.isFinite)).map(([s, a]) => [s, a.igg.length]);
+  let cand = Object.entries(grupos).filter(([, a]) => a[sinal] && a[sinal].every(Number.isFinite)).map(([s, a]) => [s, a[sinal].length]);
   cand.sort((x, y) => x[1] - y[1]);
   let sel = cand.filter(([, n]) => n >= p.N_MIN_CALIB);
   if (!sel.length) sel = cand.slice(-10);
@@ -671,7 +755,7 @@ export function calibrarFuncional(grupos, p = PADRAO, grade = null) {
   for (const [s] of sel) {
     const a = grupos[s];
     const ext = Math.max(extensao(a, 0, a.ini.length), 1e-9);
-    grade.forEach((al, i) => { const f = segmentarFuncional(a, al, p); soma[i] += f.bic; nq[i] += f.quebras.length / ext / sel.length; });
+    grade.forEach((al, i) => { const f = segmentarFuncional(a, al, p, sinal); soma[i] += f.bic; nq[i] += f.quebras.length / ext / sel.length; });
   }
   let j = 0;
   for (let i = 1; i < soma.length; i++) if (soma[i] < soma[j]) j = i;

@@ -1,5 +1,5 @@
 // Gráficos (Plotly). Cores e tinta vêm dos tokens CSS, então seguem o tema claro/escuro.
-import { cssVar, num, km, fatorTxt, qnorm, TIPOS, NOMES_PARAM, UNIDADES, classesDe } from './util.js';
+import { cssVar, FONTE_UI, FONTE_MONO, num, km, fatorTxt, qnorm, TIPOS, NOMES_PARAM, UNIDADES, classesDe } from './util.js';
 
 const CONFIG_PLOTLY = {
   displaylogo: false, responsive: true,
@@ -27,7 +27,7 @@ export function corFator(fatores, i, iRef) {
 
 function eixo(c, extra = {}) {
   return {
-    gridcolor: c.grade, linecolor: c.eixo, zerolinecolor: c.eixo, tickfont: { color: c.mudo, size: 11 },
+    gridcolor: c.grade, linecolor: c.eixo, zerolinecolor: c.eixo, tickfont: { family: FONTE_MONO, color: c.mudo, size: 11 },
     title: { font: { color: c.texto2, size: 12 } }, automargin: true, ...extra,
     ...(extra.title && typeof extra.title === 'string' ? { title: { text: extra.title, font: { color: c.texto2, size: 12 } } } : {}),
   };
@@ -36,7 +36,7 @@ function eixo(c, extra = {}) {
 function base(c, extra = {}) {
   return {
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { family: '"Sofia Sans Semi Condensed", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', color: c.texto, size: 12 },
+    font: { family: FONTE_UI, color: c.texto, size: 12 },
     margin: { l: 56, r: 16, t: 16, b: 44 },
     hoverlabel: { bgcolor: c.sup, bordercolor: c.eixo, font: { color: c.texto } },
     legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: { color: c.texto2, size: 12 }, bgcolor: 'rgba(0,0,0,0)' },
