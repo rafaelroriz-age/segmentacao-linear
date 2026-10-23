@@ -1,8 +1,9 @@
-// Página "Metodologia e guia": atalhos para as funções, simulador da penalidade, teste rápido,
-// glossário com busca e dicionário de dados.
-import { pelt, prefixos } from './modelo.js';
+// Página "Metodologia e guia": atalhos para as funções, simulador da penalidade, verificação de
+// paridade Python ↔ JS (modelo.js × segmentações gravadas pelo notebook), glossário e dicionário de dados.
+import { pelt, prefixos, arraysDoBanco, temD0, caminhoSre, segmentarSre, f1Quebras } from './modelo.js';
+import { carregarSre } from './dados.js';
 import { media } from './estatistica.js';
-import { cssVar, esc, num } from './util.js';
+import { cssVar, esc, num, FONTE_UI, FONTE_MONO } from './util.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,27 +60,15 @@ const DICIONARIO = [
   ['quebras_removidas_km / quebras_novas_km', 'lista de km', 'O que mudou em relação ao passo anterior', 'sensibilidade'],
 ];
 
-const QUIZ = [
-  { p: 'Se a penalidade aumenta, o que acontece com o número de segmentos?',
-    o: ['Aumenta', 'Diminui ou fica igual', 'Não muda nunca'], c: 1,
-    e: 'Cada quebra passa a “custar” mais, então só ficam as quebras que melhoram muito o ajuste.' },
-  { p: 'Qual parâmetro orienta a segmentação estrutural?', o: ['IGG', 'IRI', 'd0 (deflexão)'], c: 2,
-    e: 'A estrutural usa o d0 do FWD; a funcional usa o IGG.' },
-  { p: 'Na sensibilidade, uma segmentação “robusta” é aquela que…',
-    o: ['muda de quebras a cada pequena mudança de penalidade', 'mantém as mesmas quebras numa faixa larga de penalidades', 'tem sempre um só segmento'], c: 1,
-    e: 'Se as quebras se mantêm numa faixa larga, a escolha exata da penalidade pesa pouco no resultado.' },
-  { p: 'O que aparece ao aproximar o mapa até o zoom 13?', o: ['Só os SREs inteiros', 'Os intervalos de 200 m', 'Nada muda'], c: 1,
-    e: 'O mapa tem três níveis: SREs, segmentos homogêneos e, de perto, os intervalos de 200 m.' },
-];
 
-export function montarMetodo() {
+export function montarMetodo(rede) {
   document.querySelectorAll('#pagina-metodo [data-ir]').forEach((b) => b.addEventListener('click', () => {
     document.querySelector(`.aba-topo[data-pagina="${b.dataset.ir}"]`).click();
     window.scrollTo({ top: 0 });
   }));
   glossario();
   dicionario();
-  quiz();
+  paridade(rede);
   simulador();
 }
 
@@ -96,27 +85,6 @@ function glossario() {
 function dicionario() {
   $('dicionario').innerHTML = `<thead><tr><th class="txt">Coluna</th><th class="txt">Tipo</th><th class="txt">Significado</th><th class="txt">Onde aparece</th></tr></thead><tbody>${
     DICIONARIO.map(([c, t, s, o]) => `<tr><td class="txt"><code>${esc(c)}</code></td><td class="txt">${esc(t)}</td><td class="txt">${esc(s)}</td><td class="txt">${esc(o)}</td></tr>`).join('')}</tbody>`;
-}
-
-function quiz() {
-  let certas = 0, feitas = 0;
-  $('quiz').innerHTML = QUIZ.map((q, i) => `<fieldset class="pergunta" data-i="${i}"><legend>${i + 1}. ${esc(q.p)}</legend>
-    <div class="opcoes">${q.o.map((o, j) => `<button type="button" class="opcao" data-j="${j}">${esc(o)}</button>`).join('')}</div>
-    <p class="resposta" hidden></p></fieldset>`).join('');
-  $('quiz').querySelectorAll('.pergunta').forEach((fs) => fs.querySelectorAll('.opcao').forEach((b) => b.addEventListener('click', () => {
-    const q = QUIZ[Number(fs.dataset.i)];
-    if (fs.dataset.feita) return;
-    fs.dataset.feita = '1';
-    feitas++;
-    const ok = Number(b.dataset.j) === q.c;
-    if (ok) certas++;
-    fs.querySelectorAll('.opcao').forEach((x) => { x.disabled = true; if (Number(x.dataset.j) === q.c) x.classList.add('certa'); });
-    if (!ok) b.classList.add('errada');
-    const r = fs.querySelector('.resposta');
-    r.hidden = false;
-    r.textContent = `${ok ? 'Certo.' : 'Não exatamente.'} ${q.e}`;
-    $('quiz-placar').textContent = `${certas} de ${feitas} certas${feitas === QUIZ.length ? ' — teste concluído.' : ''}`;
-  })));
 }
 
 // ── simulador: PELT l2 num sinal de exemplo com três níveis ──
@@ -150,9 +118,9 @@ function simulador() {
       { x: mx, y: my, mode: 'lines', line: { color: cor, width: 3 }, name: 'média do segmento', hoverinfo: 'skip' },
     ], {
       paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', margin: { l: 44, r: 10, t: 10, b: 36 }, showlegend: false, separators: ',.',
-      font: { family: '"Sofia Sans Semi Condensed", system-ui, sans-serif', color: cssVar('--texto'), size: 12 },
+      font: { family: FONTE_UI, color: cssVar('--texto'), size: 12 },
       shapes: bk.slice(0, -1).map((b) => ({ type: 'line', x0: b * 0.2, x1: b * 0.2, yref: 'paper', y0: 0, y1: 1, line: { color: cssVar('--s-comb'), width: 2, dash: 'dash' } })),
-      xaxis: { title: { text: 'km' }, gridcolor: grade, tickfont: { color: mudo } }, yaxis: { title: { text: 'd0' }, gridcolor: grade, tickfont: { color: mudo } },
+      xaxis: { title: { text: 'km' }, gridcolor: grade, tickfont: { family: FONTE_MONO, color: mudo } }, yaxis: { title: { text: 'd0' }, gridcolor: grade, tickfont: { family: FONTE_MONO, color: mudo } },
     }, { displayModeBar: false, responsive: true });
     const dica = k === 0 ? 'A penalidade está tão alta que nenhuma quebra compensa: o trecho vira um único segmento.'
       : k <= 2 ? 'Faixa boa: o modelo encontra as mudanças reais de nível do exemplo (ele foi gerado com 3 níveis, ou seja, 2 quebras).'
@@ -162,4 +130,90 @@ function simulador() {
   $('sim-pen').addEventListener('input', desenhar);
   $('sim-novo').addEventListener('click', novo);
   novo();
+}
+
+// ── paridade: mesma conferência de tools/validar_modelo_js.mjs, numa amostra de SREs do banco ──
+const r3 = (v) => Math.round(v * 1000) / 1000;
+const TIPOS_PAR = ['funcional', 'estrutural', 'combinada'];
+
+function amostra(sres, n) {
+  const lst = sres.filter((s) => s.n_intervalos > 0).map((s) => s.sre).sort();
+  if (lst.length <= n) return lst;
+  return Array.from({ length: n }, (_, i) => lst[Math.floor((i + 0.5) * lst.length / n)]);
+}
+
+function verificarSre(pac, meta) {
+  const a = arraysDoBanco(pac.intervalos);
+  const cam = temD0(a) ? caminhoSre(a, meta.beta_min) : null;
+  const tol = meta.sens_tol_km ?? 0.4;
+  const out = { ok: {}, tot: {}, f1: [], dp: null };
+  for (const c of pac.cenarios) {
+    const r = segmentarSre(a, { alphaFunc: meta.alpha_km_func, beta: c.beta_estrut ?? 0, cam, auditar: c.fator === 1 });
+    const meu = { funcional: r.func_km, estrutural: r.estrut_km, combinada: r.comb_km };
+    for (const t of TIPOS_PAR) {
+      const esperado = pac.sens_fator.find((x) => x.fator === c.fator && x.tipo === t)?.quebras_km;
+      if (!esperado) continue;
+      out.tot[t] = (out.tot[t] || 0) + 1;
+      if (JSON.stringify(meu[t].map(r3)) === JSON.stringify(esperado)) out.ok[t] = (out.ok[t] || 0) + 1;
+      else out.f1.push(f1Quebras(esperado, meu[t], tol).f1);
+    }
+    const au = c.fator === 1 && pac.auditoria.find((x) => x.fator === 1);
+    if (au && au.shapiro_p !== null && r.aud?.shapiro_p !== undefined) {
+      out.dp = Math.max(...['shapiro_p', 'ks_p', 'ljung_box_p'].map((k) => Math.abs(au[k] - r.aud[k])));
+    }
+  }
+  return out;
+}
+
+function paridade(rede) {
+  const pct = (o, t) => (t ? `${num(100 * o / t, 1)}%` : '—');
+  const kpi = (rot, val, det = '') => `<div class="kpi"><div class="rot">${rot}</div><div class="val">${val}</div>${det ? `<div class="det">${det}</div>` : ''}</div>`;
+  $('par-rodar').addEventListener('click', async () => {
+    const pedidos = $('par-lista').value.toUpperCase().split(/[\s,;]+/).filter(Boolean);
+    const conhecidos = new Set(rede.sres.map((s) => s.sre));
+    const lista = pedidos.length ? pedidos.filter((s) => conhecidos.has(s)) : amostra(rede.sres, Number($('par-n').value));
+    if (!lista.length) { $('par-saida').hidden = false; $('par-status').textContent = 'Nenhum dos SREs informados existe na malha.'; return; }
+    $('par-rodar').disabled = true;
+    $('par-saida').hidden = false;
+    const linhas = [], tot = {}, ok = {}, f1 = [];
+    let audOk = 0, audTot = 0;
+    const t0 = performance.now();
+    for (const [i, sre] of lista.entries()) {
+      $('par-status').textContent = `Verificando ${i + 1} de ${lista.length}: ${sre}…`;
+      let r = null, erro = '';
+      try {
+        const pac = await carregarSre(sre);
+        if (pac.intervalos.length) r = verificarSre(pac, rede.meta);
+      } catch (e) { erro = e.message; }
+      if (r) {
+        TIPOS_PAR.forEach((t) => { tot[t] = (tot[t] || 0) + (r.tot[t] || 0); ok[t] = (ok[t] || 0) + (r.ok[t] || 0); });
+        f1.push(...r.f1);
+        if (r.dp !== null) { audTot++; if (r.dp < 2e-3) audOk++; }
+      }
+      linhas.push({ sre, r, erro });
+      await new Promise((ok) => setTimeout(ok));
+    }
+    const seg = (performance.now() - t0) / 1000;
+    const f1m = f1.length ? f1.reduce((x, y) => x + y, 0) / f1.length : null;
+    $('par-kpis').innerHTML = [
+      kpi('SREs verificados', num(lista.length, 0), `${num(seg, 1)} s no navegador`),
+      ...TIPOS_PAR.map((t) => kpi(`Idênticas · ${t}`, pct(ok[t] || 0, tot[t]), `${num(ok[t] || 0, 0)} / ${num(tot[t] || 0, 0)} cenários`)),
+      kpi('F1 das divergentes', f1m === null ? '—' : num(f1m, 3), `${num(f1.length, 0)} segmentações`),
+      kpi('Auditoria', `${num(audOk, 0)} / ${num(audTot, 0)}`, '|Δp| < 0,002'),
+    ].join('');
+    $('par-status').textContent = 'Comparação exata das quebras em km (3 casas) por cenário de penalidade; F1 com a tolerância da sensibilidade. A auditoria compara os p-valores de Shapiro-Wilk, KS e Ljung-Box do cenário de referência.';
+    const cel = (r, t) => {
+      if (!r?.tot[t]) return '<td>—</td>';
+      const o = r.ok[t] || 0;
+      return `<td class="${o === r.tot[t] ? 'ok' : 'difere'}">${o}/${r.tot[t]}</td>`;
+    };
+    $('par-tabela').innerHTML = `<table><thead><tr><th>SRE</th>${TIPOS_PAR.map((t) => `<th>${t}</th>`).join('')}<th>F1 mín.</th><th>máx. |Δp| auditoria</th><th class="txt">Situação</th></tr></thead><tbody>${
+      linhas.map(({ sre, r, erro }) => {
+        if (!r) return `<tr><td>${esc(sre)}</td><td colspan="5"></td><td class="txt">${esc(erro || 'sem intervalos')}</td></tr>`;
+        const ident = TIPOS_PAR.every((t) => (r.ok[t] || 0) === (r.tot[t] || 0));
+        return `<tr><td>${esc(sre)}</td>${TIPOS_PAR.map((t) => cel(r, t)).join('')}<td>${r.f1.length ? num(Math.min(...r.f1), 3) : '—'}</td>`
+          + `<td>${r.dp === null ? '—' : num(r.dp, 4)}</td><td class="txt ${ident ? 'ok' : 'difere'}">${ident ? '✓ idêntico' : '≠ difere'}</td></tr>`;
+      }).join('')}</tbody></table>`;
+    $('par-rodar').disabled = false;
+  });
 }

@@ -37,7 +37,7 @@ async function diagnosticar(msg) {
   testes.push([`Banco de dados (${url ? new URL(url).host : 'não configurado'})`, url
     ? fetch(`${url}/rest/v1/rpc/segmentos_rede`, { method: 'POST', headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_tipo: 'combinada' }) }).then((r) => r.ok)
     : Promise.resolve(false)]);
-  testes.push([`Mapa base (${new URL(URL_MAPA_BASE).host})`, new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = `${URL_MAPA_BASE}/light_all/0/0/0.png`; setTimeout(() => ok(false), 8000); })]);
+  testes.push([`Mapa base (${new URL(URL_MAPA_BASE).host})`, new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = `${URL_MAPA_BASE}/World_Light_Gray_Base/MapServer/tile/0/0/0`; setTimeout(() => ok(false), 8000); })]);
   const res = await Promise.all(testes.map(([n, p]) => p.then((v) => [n, !!v]).catch(() => [n, false])));
   lista.innerHTML = res.map(([n, ok]) => `<li class="${ok ? 'ok' : 'falha'}">${ok ? '✓' : '✕'} ${esc(n)} — ${ok ? 'acessível' : 'sem acesso'}</li>`).join('')
     + (res.some(([, ok]) => !ok) ? '<li>Itens com ✕ costumam ser bloqueio de rede, proxy ou firewall da empresa para esse endereço. Tente de outra rede (por exemplo, o celular) ou peça liberação ao TI.</li>' : '<li>Tudo acessível: recarregue com Ctrl+F5 para descartar arquivos antigos do navegador.</li>');

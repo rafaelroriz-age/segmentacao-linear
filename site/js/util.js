@@ -27,21 +27,22 @@ export function esc(s) {
 export const FONTE_UI = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 export const FONTE_MONO = '"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace';
 
-// ── mapa base cartográfico monocromático (CARTO Positron / Dark Matter), trocado junto com o tema ──
+// ── mapa base cartográfico monocromático (Esri Light/Dark Gray Canvas), trocado junto com o tema ──
+// Sem chave de API: os basemaps da CARTO (Positron/Dark Matter) passaram a devolver marca d'água
+// "API KEY REQUIRED" sem chave. Os rótulos ficam numa camada separada, também em cinza.
 const midiaEscura = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
 export function temaEscuro() {
   const t = document.documentElement.dataset.theme;
   return t ? t === 'dark' : !!midiaEscura?.matches;
 }
-export const URL_MAPA_BASE = 'https://basemaps.cartocdn.com';
+export const URL_MAPA_BASE = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
 export function camadaBase(map) {
-  const url = () => `https://{s}.basemaps.cartocdn.com/${temaEscuro() ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`;
-  const camada = L.tileLayer(url(), {
-    subdomains: 'abcd', maxZoom: 20,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  }).addTo(map);
-  midiaEscura?.addEventListener('change', () => camada.setUrl(url()));
-  return camada;
+  const url = (tipo) => `${URL_MAPA_BASE}/World_${temaEscuro() ? 'Dark' : 'Light'}_Gray_${tipo}/MapServer/tile/{z}/{y}/{x}`;
+  const opc = { maxNativeZoom: 16, maxZoom: 20 };
+  const base = L.tileLayer(url('Base'), { ...opc, attribution: 'Base: Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+  const rotulos = L.tileLayer(url('Reference'), opc).addTo(map);
+  midiaEscura?.addEventListener('change', () => { base.setUrl(url('Base')); rotulos.setUrl(url('Reference')); });
+  return base;
 }
 
 export function cssVar(nome) {

@@ -103,7 +103,7 @@ export class Mapa {
       linha._limites = linha.getBounds();
     });
     this.contornoMalha = L.featureGroup([...this.linhas.values()]).getBounds();
-    this.map.fitBounds(this.contornoMalha, { padding: [10, 10] });
+    this.map.fitBounds(this.contornoMalha, { padding: [10, 10], animate: false });   // sem animação: um SRE do #sre= na URL precisa conseguir dar zoom logo depois
     this.atualizar();
   }
 

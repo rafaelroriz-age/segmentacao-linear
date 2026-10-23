@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Segmentação Homogênea</title>
 <meta name="description" content="Segmentação homogênea da malha rodoviária (SRE → segmentos homogêneos → intervalos de 200 m), sensibilidade da penalidade por SRE e execução do modelo com dados próprios.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e2340'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='18' font-weight='700' text-anchor='middle' fill='white'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%230e2340'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='18' font-weight='700' text-anchor='middle' fill='white'%3ES%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Semi+Condensed:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="css/estilo.css">
 <script src="vendor/leaflet.js"></script>
@@ -331,7 +331,7 @@
             <label class="param"><span>1 · Parâmetro funcional</span><select id="rd-func"><option value="igg">IGG</option><option value="iri">IRI</option></select><small>Sinal da segmentação funcional (PELT l2).</small></label>
             <label class="param"><span>2 · Parâmetro estrutural</span><select id="rd-estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select><small>Raio = 6250 / (2·(D0 − D20)) quando não houver coluna “raio”.</small></label>
             <label class="param"><span>Modelo do PELT (estrutural)</span><select id="rd-modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select><small>Sugestão: normal para D0 e raio; linear para a ACA.</small></label>
-            <label class="param"><span>Penalidade estrutural <button class="ajuda" type="button" title="Penalidade do PELT normal sobre d0: cada quebra custa este valor. O notebook usa o cotovelo da curva “quebras na malha × penalidade” (o ponto a partir do qual aumentar a penalidade quase não remove quebras).">?</button></span>
+            <label class="param"><span>Penalidade estrutural <span class="num">β</span> <button class="ajuda" type="button" title="Penalidade do PELT normal sobre d0: cada quebra custa este valor. O notebook usa o cotovelo da curva “quebras na malha × penalidade” (o ponto a partir do qual aumentar a penalidade quase não remove quebras).">?</button></span>
               <select id="rd-modo-beta">
                 <option value="rede">Cotovelo do seu dataset (como a v8)</option>
                 <option value="malha" id="rd-penalidade-malha">A mesma da malha</option>
@@ -339,13 +339,13 @@
                 <option value="fixo">Valor fixo</option>
               </select></label>
             <label class="param"><span>Valor fixo da penalidade estrutural</span><input type="number" step="any" id="rd-beta-fixo" disabled></label>
-            <label class="param"><span>Quociente funcional α_km <button class="ajuda" type="button" title="A penalidade funcional é α_km × extensão do SRE (penalidade por km), para SREs curtos e longos terem densidade de quebras parecida. A v8 calibra α_km pelo mínimo da soma do BIC numa amostra de SREs.">?</button></span>
+            <label class="param"><span>Quociente funcional <span class="num">α<sub>km</sub></span> <button class="ajuda" type="button" title="A penalidade funcional é α_km × extensão do SRE (penalidade por km), para SREs curtos e longos terem densidade de quebras parecida. A v8 calibra α_km pelo mínimo da soma do BIC numa amostra de SREs.">?</button></span>
               <select id="rd-modo-alpha">
                 <option value="malha" id="rd-alpha-malha">O mesmo da malha</option>
                 <option value="calibrar">Calibrar no seu dataset (mínimo do BIC)</option>
                 <option value="fixo">Valor fixo</option>
               </select></label>
-            <label class="param"><span>Valor fixo de α_km</span><input type="number" step="any" id="rd-alpha-fixo" disabled></label>
+            <label class="param"><span>Valor fixo de <span class="num">α<sub>km</sub></span></span><input type="number" step="any" id="rd-alpha-fixo" disabled></label>
           </div>
           <div id="rd-params"></div>
           <button class="btn btn-sec" type="button" id="rd-restaurar">Restaurar parâmetros padrão</button>
@@ -412,12 +412,12 @@
       <div>
         <span class="sobretitulo">Como funciona</span>
         <h1>Metodologia e guia</h1>
-        <p class="sub">O que o aplicativo faz, os termos que ele usa e algumas atividades para experimentar.</p>
+        <p class="sub">O que o aplicativo faz, a especificação formal do método, a verificação de paridade com o notebook e os termos usados.</p>
       </div>
     </header>
 
     <nav class="indice" aria-label="Nesta página">
-      <a href="#m-funcoes">Funções do aplicativo</a><a href="#m-simulador">Experimente a penalidade</a><a href="#m-quiz">Teste rápido</a><a href="#m-glossario">Glossário</a><a href="#m-dicionario">Dicionário de dados</a><a href="#m-metodo">Método</a>
+      <a href="#m-funcoes">Funções do aplicativo</a><a href="#m-simulador">Experimente a penalidade</a><a href="#m-formal">Especificação formal</a><a href="#m-paridade">Paridade Python ↔ JS</a><a href="#m-glossario">Glossário</a><a href="#m-dicionario">Dicionário de dados</a><a href="#m-metodo">Método</a>
     </nav>
 
     <section class="cartao" id="m-funcoes">
@@ -443,11 +443,94 @@
       <p class="nota" id="sim-texto"></p>
     </section>
 
-    <section class="cartao" id="m-quiz">
-      <h2>Teste rápido</h2>
-      <p class="sub">Quatro perguntas para fixar as ideias. A explicação aparece ao escolher.</p>
-      <div id="quiz"></div>
-      <p class="sub" id="quiz-placar"></p>
+    <section class="cartao" id="m-formal">
+      <h2>Especificação formal</h2>
+      <p class="sub">As equações que <code>site/js/modelo.js</code> implementa, na mesma forma do notebook v8.</p>
+      <div class="eqs">
+        <div class="eq" id="eq-1">
+          <div><div class="eq-tit">Objetivo do PELT (penalidade linear no nº de quebras)</div>
+            <math display="block"><munder><mi>min</mi><mrow><mi>m</mi><mo>,</mo><msub><mi>τ</mi><mrow><mn>1</mn><mo>:</mo><mi>m</mi></mrow></msub></mrow></munder><mspace width="0.3em"/><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mrow><mi>m</mi><mo>+</mo><mn>1</mn></mrow></munderover><mi mathvariant="script">C</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mo stretchy="false">(</mo><msub><mi>τ</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>:</mo><msub><mi>τ</mi><mi>i</mi></msub></mrow></msub><mo stretchy="false">)</mo><mo>+</mo><mi>β</mi><mspace width="0.15em"/><mi>m</mi></math></div>
+          <span class="eq-n">(1)</span>
+          <p><math><msub><mi>τ</mi><mn>0</mn></msub><mo>=</mo><mn>0</mn></math>, <math><msub><mi>τ</mi><mrow><mi>m</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>n</mi></math>; <math><mi>m</mi></math> = nº de quebras; <math><mi>β</mi></math> = penalidade. Uma quebra só entra se reduzir o custo em mais de <math><mi>β</mi></math>. Killick, Fearnhead &amp; Eckley (2012).</p>
+        </div>
+        <div class="eq" id="eq-2">
+          <div><div class="eq-tit">Recursão do custo ótimo</div>
+            <math display="block"><mi>F</mi><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mi>min</mi><mrow><mi>s</mi><mo>∈</mo><msub><mi>R</mi><mi>t</mi></msub></mrow></munder><mrow><mo stretchy="false">[</mo><mi>F</mi><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo><mo>+</mo><mi mathvariant="script">C</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mo stretchy="false">(</mo><mi>s</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>:</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mo>+</mo><mi>β</mi><mo stretchy="false">]</mo></mrow><mo>,</mo><mspace width="1em"/><mi>F</mi><mo stretchy="false">(</mo><mn>0</mn><mo stretchy="false">)</mo><mo>=</mo><mn>0</mn></math></div>
+          <span class="eq-n">(2)</span>
+          <p>Somar <math><mi>β</mi></math> também ao primeiro segmento só desloca o total em <math><mi>β</mi></math>, sem mudar as quebras ótimas. Cada custo de segmento sai em <math><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></math> por somas acumuladas de <math><mi>y</mi></math> e <math><msup><mi>y</mi><mn>2</mn></msup></math> (<code>prefixos()</code>).</p>
+        </div>
+        <div class="eq" id="eq-3">
+          <div><div class="eq-tit">Poda</div>
+            <math display="block"><msub><mi>R</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mo stretchy="false">{</mo><mi>s</mi><mo>∈</mo><msub><mi>R</mi><mi>t</mi></msub><mo>∪</mo><mo stretchy="false">{</mo><mi>t</mi><mo stretchy="false">}</mo><mo>:</mo><mspace width="0.3em"/><mi>F</mi><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo><mo>+</mo><mi mathvariant="script">C</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mo stretchy="false">(</mo><mi>s</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>:</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mo>≤</mo><mi>F</mi><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo stretchy="false">}</mo></math></div>
+          <span class="eq-n">(3)</span>
+          <p>Candidatos que já não podem ser ótimos saem da busca. Com tamanho mínimo de segmento, o modo exato adia a poda para manter o ótimo global.</p>
+        </div>
+        <div class="eq" id="eq-4">
+          <div><div class="eq-tit">Custo l2 (funcional: IGG ou IRI padronizado)</div>
+            <math display="block"><msub><mi mathvariant="script">C</mi><mtext>l2</mtext></msub><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow></msub><mo stretchy="false">)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mi>a</mi></mrow><mi>b</mi></munderover><msup><mrow><mo stretchy="false">(</mo><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>¯</mo></mover><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow></msub><mo stretchy="false">)</mo></mrow><mn>2</mn></msup></math></div>
+          <span class="eq-n">(4)</span>
+          <p>Detecta mudanças de nível (média).</p>
+        </div>
+        <div class="eq" id="eq-5">
+          <div><div class="eq-tit">Custo normal (estrutural: d0) — Biswas &amp; Kuna (2022)</div>
+            <math display="block"><msub><mi mathvariant="script">C</mi><mtext>N</mtext></msub><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow></msub><mo stretchy="false">)</mo><mo>=</mo><mi>n</mi><mspace width="0.15em"/><mi>ln</mi><mo stretchy="false">(</mo><msubsup><mover><mi>σ</mi><mo>^</mo></mover><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow><mn>2</mn></msubsup><mo>+</mo><mi>ε</mi><mo stretchy="false">)</mo><mo>,</mo><mspace width="1em"/><msubsup><mover><mi>σ</mi><mo>^</mo></mover><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow><mn>2</mn></msubsup><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mi>a</mi></mrow><mi>b</mi></munderover><msup><mrow><mo stretchy="false">(</mo><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>¯</mo></mover><mrow><mi>a</mi><mo>:</mo><mi>b</mi></mrow></msub><mo stretchy="false">)</mo></mrow><mn>2</mn></msup></math></div>
+          <span class="eq-n">(5)</span>
+          <p><math><mi>n</mi><mo>=</mo><mi>b</mi><mo>−</mo><mi>a</mi><mo>+</mo><mn>1</mn></math>; <math><mi>ε</mi></math> = piso de variância. Equivale a −2 × log-verossimilhança gaussiana: capta mudança de média <em>ou</em> de variabilidade.</p>
+        </div>
+        <div class="eq" id="eq-6">
+          <div><div class="eq-tit">Custo linear (tendência, para a ACA)</div>
+            <math display="block"><msub><mi mathvariant="script">C</mi><mtext>lin</mtext></msub><mo>=</mo><msub><mi>S</mi><mrow><mi>y</mi><mi>y</mi></mrow></msub><mo>−</mo><mfrac><msubsup><mi>S</mi><mrow><mi>x</mi><mi>y</mi></mrow><mn>2</mn></msubsup><msub><mi>S</mi><mrow><mi>x</mi><mi>x</mi></mrow></msub></mfrac></math></div>
+          <span class="eq-n">(6)</span>
+          <p>Soma dos quadrados dos resíduos da reta de mínimos quadrados no segmento (<math><mi>S</mi></math> = somas centradas).</p>
+        </div>
+        <div class="eq" id="eq-7">
+          <div><div class="eq-tit">Penalidade funcional proporcional à extensão</div>
+            <math display="block"><msub><mi>β</mi><mtext>func</mtext></msub><mo>=</mo><msub><mi>α</mi><mtext>km</mtext></msub><mo>·</mo><msub><mi>L</mi><mtext>SRE</mtext></msub></math></div>
+          <span class="eq-n">(7)</span>
+          <p>Densidade de quebras parecida entre SREs curtos e longos; a penalidade final sai de uma banda ±margem em torno deste valor, pelo menor BIC (8).</p>
+        </div>
+        <div class="eq" id="eq-8">
+          <div><div class="eq-tit">Critério de informação bayesiano</div>
+            <math display="block"><mtext>BIC</mtext><mo>=</mo><mi>N</mi><mspace width="0.15em"/><mi>ln</mi><mo stretchy="false">(</mo><mfrac><mtext>SSE</mtext><mi>N</mi></mfrac><mo stretchy="false">)</mo><mo>+</mo><mo stretchy="false">(</mo><mn>2</mn><mi>L</mi><mo>−</mo><mn>1</mn><mo stretchy="false">)</mo><mspace width="0.15em"/><mi>ln</mi><mi>N</mi></math></div>
+          <span class="eq-n">(8)</span>
+          <p><math><mi>L</mi></math> = nº de segmentos (<math><mi>L</mi></math> médias + <math><mi>L</mi><mo>−</mo><mn>1</mn></math> posições de quebra). <math><msub><mi>α</mi><mtext>km</mtext></msub></math> da malha = mínimo da soma do BIC numa amostra de SREs.</p>
+        </div>
+        <div class="eq" id="eq-9">
+          <div><div class="eq-tit">Cotovelo da curva quebras × penalidade (Kneedle)</div>
+            <math display="block"><msup><mi>i</mi><mo>*</mo></msup><mo>=</mo><munder><mrow><mi>arg</mi><mspace width="0.15em"/><mi>max</mi></mrow><mi>i</mi></munder><mrow><mo stretchy="false">|</mo><mo stretchy="false">(</mo><msub><mover><mi>K</mi><mo>~</mo></mover><mi>L</mi></msub><mo>−</mo><msub><mover><mi>K</mi><mo>~</mo></mover><mn>0</mn></msub><mo stretchy="false">)</mo><msub><mover><mi>β</mi><mo>~</mo></mover><mi>i</mi></msub><mo>−</mo><mo stretchy="false">(</mo><msub><mover><mi>β</mi><mo>~</mo></mover><mi>L</mi></msub><mo>−</mo><msub><mover><mi>β</mi><mo>~</mo></mover><mn>0</mn></msub><mo stretchy="false">)</mo><msub><mover><mi>K</mi><mo>~</mo></mover><mi>i</mi></msub><mo>+</mo><msub><mover><mi>β</mi><mo>~</mo></mover><mi>L</mi></msub><msub><mover><mi>K</mi><mo>~</mo></mover><mn>0</mn></msub><mo>−</mo><msub><mover><mi>K</mi><mo>~</mo></mover><mi>L</mi></msub><msub><mover><mi>β</mi><mo>~</mo></mover><mn>0</mn></msub><mo stretchy="false">|</mo></mrow></math></div>
+          <span class="eq-n">(9)</span>
+          <p>Distância de cada ponto, normalizado em [0, 1], à corda entre as extremidades; a penalidade da rede é <math><msub><mi>β</mi><msup><mi>i</mi><mo>*</mo></msup></msub></math>. Na malha, <math><mi>K</mi></math> = total de quebras; por SRE, o caminho CROPS dá <math><mi>K</mi><mo stretchy="false">(</mo><mi>β</mi><mo stretchy="false">)</mo></math> exato.</p>
+        </div>
+        <div class="eq" id="eq-10">
+          <div><div class="eq-tit">Fusão de vizinhos (Welch; Brown-Forsythe para a variância)</div>
+            <math display="block"><mi>t</mi><mo>=</mo><mfrac><mrow><msub><mover><mi>y</mi><mo>¯</mo></mover><mn>1</mn></msub><mo>−</mo><msub><mover><mi>y</mi><mo>¯</mo></mover><mn>2</mn></msub></mrow><msqrt><mrow><msubsup><mi>s</mi><mn>1</mn><mn>2</mn></msubsup><mo>/</mo><msub><mi>n</mi><mn>1</mn></msub><mo>+</mo><msubsup><mi>s</mi><mn>2</mn><mn>2</mn></msubsup><mo>/</mo><msub><mi>n</mi><mn>2</mn></msub></mrow></msqrt></mfrac></math></div>
+          <span class="eq-n">(10)</span>
+          <p>Repetidamente, a quebra com maior <math><mi>p</mi></math> (o menor entre séries e testes) é removida enquanto <math><mi>p</mi><mo>&gt;</mo><mi>α</mi></math>.</p>
+        </div>
+        <div class="eq" id="eq-11">
+          <div><div class="eq-tit">Concordância de quebras (F1 com tolerância δ)</div>
+            <math display="block"><msub><mi>F</mi><mn>1</mn></msub><mo>=</mo><mfrac><mrow><mn>2</mn><mi>P</mi><mi>R</mi></mrow><mrow><mi>P</mi><mo>+</mo><mi>R</mi></mrow></mfrac><mo>,</mo><mspace width="1em"/><mi>P</mi><mo>=</mo><mfrac><mrow><mo stretchy="false">|</mo><mo stretchy="false">{</mo><mover><mi>b</mi><mo>^</mo></mover><mo>∈</mo><mover><mi>B</mi><mo>^</mo></mover><mo>:</mo><mo>∃</mo><mi>b</mi><mo>∈</mo><mi>B</mi><mo>,</mo><mo stretchy="false">|</mo><mover><mi>b</mi><mo>^</mo></mover><mo>−</mo><mi>b</mi><mo stretchy="false">|</mo><mo>≤</mo><mi>δ</mi><mo stretchy="false">}</mo><mo stretchy="false">|</mo></mrow><mrow><mo stretchy="false">|</mo><mover><mi>B</mi><mo>^</mo></mover><mo stretchy="false">|</mo></mrow></mfrac></math></div>
+          <span class="eq-n">(11)</span>
+          <p><math><mi>R</mi></math> é o mesmo com os papéis de <math><mi>B</mi></math> e <math><mover><mi>B</mi><mo>^</mo></mover></math> trocados. Usada na sensibilidade e na verificação de paridade abaixo.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="cartao" id="m-paridade">
+      <h2>Verificação de paridade Python ↔ JS</h2>
+      <p class="sub">Refaz no navegador, com <code>modelo.js</code>, a segmentação de cada cenário de penalidade gravado pelo notebook e compara as quebras (km, 3 casas) com as do banco. Divergências pequenas vêm do arredondamento do d0 no banco e de empates numéricos entre quebras vizinhas.</p>
+      <div class="painel-controles">
+        <label class="controle"><span class="rot-controle">Amostra</span>
+          <select id="par-n"><option value="10">10 SREs</option><option value="30" selected>30 SREs</option><option value="100">100 SREs</option></select></label>
+        <label class="controle largo"><span class="rot-controle">ou SREs específicos</span>
+          <input id="par-lista" placeholder="320EGO0130, 010EGO0010" autocomplete="off"></label>
+        <div class="controle"><span class="rot-controle">&nbsp;</span><button class="btn" type="button" id="par-rodar">Verificar</button></div>
+      </div>
+      <div class="paridade-saida" id="par-saida" hidden>
+        <div class="kpis" id="par-kpis"></div>
+        <p class="sub" id="par-status" aria-live="polite"></p>
+        <div class="tabela-rolagem baixa" id="par-tabela"></div>
+      </div>
     </section>
 
     <section class="cartao" id="m-glossario">
