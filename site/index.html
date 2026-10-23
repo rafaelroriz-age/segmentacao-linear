@@ -181,7 +181,8 @@
           <div id="insights-modelo"></div>
           <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="tit-func-modelo"></span></h3><div id="graf-func-modelo" class="graf"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="tit-estrut-modelo"></span></h3><div id="graf-estrut-modelo" class="graf"></div></div>
-          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><p class="sub">Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante).</p><div id="graf-regua-modelo" class="graf"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. Linhas pontilhadas roxas e azuis são as mesmas fronteiras dos gráficos 1 e 2; a linha cheia escura marca onde as duas coincidem (a até 0,4 km). As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="graf-unido-modelo"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">4</span> Resultado: segmentos e classe de condição</h3><p class="sub">Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante).</p><div id="graf-regua-modelo" class="graf"></div></div>
           <details class="detalhes"><summary>Diagnóstico estatístico (caminho CROPS, resíduos e auditoria do modelo gravado)</summary>
           <div class="duas-colunas">
             <div><h3>Diagnóstico CROPS</h3><p class="sub">Nº de quebras estruturais ótimo para cada penalidade (Biswas &amp; Kuna, Fig. 9)</p><div id="graf-crops" class="graf graf-medio"></div></div>
@@ -287,6 +288,7 @@
           <div class="chips" id="rd-fonte">
             <button class="chip ativo" data-v="original" type="button">Dataset original da malha</button>
             <button class="chip" data-v="upload" type="button">Enviar planilha própria</button>
+            <button class="chip" data-v="mesclar" type="button">Mesclar: dados do site + planilha própria</button>
           </div>
           <div id="rd-orig" class="caixa-fonte">
             <p class="sub">Os intervalos de 200 m da malha, como o modelo os usa, somente dos trechos com situação <strong>DUP, PAV ou EOD</strong>. Escolha uma regional, a malha inteira ou cole códigos de SRE.</p>
@@ -317,6 +319,8 @@
           <h3>Geometria (opcional)</h3>
           <p class="sub">Shapefile compactado (.zip com .shp, .shx, .dbf e .prj) ou GeoJSON com a linha de outro SRE. SREs do dataset que já existem na malha usam a geometria cadastrada. O km é distribuído ao longo da linha do início ao fim.</p>
           <div class="painel-controles">
+            <label class="controle"><span class="rot-controle">Geometria a usar</span>
+              <select id="rd-geo-modo"><option value="ambas">Do site e do arquivo (arquivo tem prioridade)</option><option value="site">Só a do site (malha cadastrada)</option><option value="arquivo">Só a do arquivo enviado</option></select></label>
             <label class="controle"><span class="rot-controle">Arquivo de geometria</span><input type="file" id="rd-geo" accept=".zip,.shp,.geojson,.json"></label>
             <div id="rd-caixa-geo" class="painel-controles" hidden>
               <label class="controle"><span class="rot-controle">Campo com o código do SRE</span><select id="rd-campo-sre"></select></label>
@@ -396,7 +400,8 @@
           <div id="rd-insights"></div>
           <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" id="rd-tit-func"></span></h3><div class="graf" id="rd-graf-func"></div></div>
           <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" id="rd-tit-estrut"></span></h3><div class="graf" id="rd-graf-estrut"></div></div>
-          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><div class="graf" id="rd-graf-regua"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. Linhas pontilhadas roxas e azuis são as mesmas fronteiras dos gráficos 1 e 2; a linha cheia escura marca onde as duas coincidem (a até 0,4 km). As faixas de fundo são os segmentos do resultado.</p><div class="graf" id="rd-graf-unido"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">4</span> Resultado: segmentos e classe de condição</h3><div class="graf" id="rd-graf-regua"></div></div>
           <div class="explicacao" id="rd-explicacao"></div>
           <h3>Segmentos</h3>
           <div class="tabela-rolagem" id="rd-tabela-sre"></div>

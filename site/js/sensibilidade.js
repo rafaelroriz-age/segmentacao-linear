@@ -50,7 +50,8 @@ export class Sensibilidade {
       <div data-r="insights"></div>
       <div class="etapa-seg"><h3><span class="num-etapa">1</span> Segmentação funcional <span class="sub" data-r="tit-func"></span></h3><div class="graf" data-r="graf-func"></div></div>
       <div class="etapa-seg"><h3><span class="num-etapa">2</span> Segmentação estrutural <span class="sub" data-r="tit-estrut"></span></h3><div class="graf" data-r="graf-estrut"></div></div>
-      <div class="etapa-seg"><h3><span class="num-etapa">3</span> Resultado: segmentos e classe de condição</h3><p class="sub">Cada barra é um segmento. Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante). Passe o mouse para ver os valores.</p><div class="graf" data-r="graf-regua"></div></div>
+      <div class="etapa-seg"><h3><span class="num-etapa">3</span> Funcional + estrutural no mesmo gráfico</h3><p class="sub">Eixo esquerdo: parâmetro funcional; direito: estrutural. Linhas pontilhadas roxas e azuis são as mesmas fronteiras dos gráficos 1 e 2; a linha cheia escura marca onde as duas coincidem (a até 0,4 km). As faixas de fundo são os segmentos do resultado.</p><div class="graf" data-r="graf-unido"></div></div>
+          <div class="etapa-seg"><h3><span class="num-etapa">4</span> Resultado: segmentos e classe de condição</h3><p class="sub">Cada barra é um segmento. Na linha do resultado, a cor é a pior classe entre a funcional e a estrutural (classe limitante). Passe o mouse para ver os valores.</p><div class="graf" data-r="graf-regua"></div></div>
       <div class="barra-download"><span class="rot-controle">Baixar</span><button class="btn btn-sec" type="button" data-r="png-passo">Gráficos deste passo (3 PNG)</button><button class="btn btn-sec" type="button" data-r="png-nseg">Segmentos × penalidade (PNG)</button><button class="btn btn-sec" type="button" data-r="png-faixas">Posição das quebras (PNG)</button><button class="btn btn-sec" type="button" data-r="png-todos">Todos os passos (um PNG por penalidade)</button></div>
       <div class="explicacao" data-r="explicacao"></div>
       <div class="cab-cartao"><div><h3>Um gráfico por penalidade</h3><p class="sub" data-r="sub-minis"></p></div></div>
@@ -84,7 +85,7 @@ export class Sensibilidade {
     const nome = (x) => `${this.ctx.sre || 'sre'}_${x}`;
     this.$('[data-r="png-passo"]').addEventListener('click', async () => {
       const pen = this.passos[this.iSel].penalidade.toFixed(2);
-      for (const [k, r] of [['funcional', 'graf-func'], ['estrutural', 'graf-estrut'], ['resultado', 'graf-regua']]) {
+      for (const [k, r] of [['funcional', 'graf-func'], ['estrutural', 'graf-estrut'], ['unido', 'graf-unido'], ['resultado', 'graf-regua']]) {
         await baixarPng(this.$(`[data-r="${r}"]`), nome(`pen_${pen}_${k}`), { largura: 1600, altura: k === 'resultado' ? 380 : 620 });
         await new Promise((ok) => setTimeout(ok, 400));
       }
@@ -260,6 +261,7 @@ export class Sensibilidade {
     GS.grafSinal(this.$('[data-r="graf-func"]'), a, cfg.func, s.func_s, { cor: '#7c3aed', rob: this.alvo === 'funcional' ? robF : null, altura: 260 });
     const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
     GS.grafSinal(this.$('[data-r="graf-estrut"]'), a, cfg.estrut, s.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', rob: robE, altura: 280 });
+    GS.grafUnido(this.$('[data-r="graf-unido"]'), a, s);
     GS.grafRegua(this.$('[data-r="graf-regua"]'), a, s, limites);
     this.$('[data-r="insights"]').innerHTML = GS.insights(a, s, limites, { robE, robF, sre });
   }

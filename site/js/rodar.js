@@ -84,9 +84,13 @@ export class Rodar {
 
     this.raiz.querySelectorAll('#rd-fonte .chip').forEach((b) => b.addEventListener('click', () => {
       this.raiz.querySelectorAll('#rd-fonte .chip').forEach((x) => x.classList.toggle('ativo', x === b));
-      this.$('rd-orig').hidden = b.dataset.v !== 'original';
-      this.$('rd-up').hidden = b.dataset.v !== 'upload';
+      this.fonte = b.dataset.v;
+      this.$('rd-orig').hidden = this.fonte === 'upload';
+      this.$('rd-up').hidden = this.fonte === 'original';
+      this.combinar();
     }));
+    this.fonte = 'original';
+    this.$('rd-geo-modo').addEventListener('change', () => { this.resumoGeo(); if (this.res) this.desenharMapa(); });
     this.$('rd-carregar-orig').addEventListener('click', () => this.carregarOriginal(false));
     this.$('rd-baixar-orig').addEventListener('click', () => this.carregarOriginal(true));
     this.$('rd-arquivo').addEventListener('change', (e) => this.lerPlanilha(e.target.files[0]));
@@ -107,7 +111,7 @@ export class Rodar {
     this.$('rd-csv').addEventListener('click', () => this.baixarResultado('csv'));
     this.$('rd-xlsx').addEventListener('click', () => this.baixarResultado('xlsx'));
     this.$('rd-png-sre').addEventListener('click', async () => {
-      for (const [k, id, h] of [['1_funcional', 'rd-graf-func', 620], ['2_estrutural', 'rd-graf-estrut', 620], ['3_resultado', 'rd-graf-regua', 380]]) {
+      for (const [k, id, h] of [['1_funcional', 'rd-graf-func', 620], ['2_estrutural', 'rd-graf-estrut', 620], ['3_unido', 'rd-graf-unido', 700], ['4_resultado', 'rd-graf-regua', 380]]) {
         await baixarPng(this.$(id), `${this.sreAtual || 'sre'}_${k}`, { largura: 1600, altura: h });
         await new Promise((ok) => setTimeout(ok, 400));
       }
@@ -185,7 +189,8 @@ export class Rodar {
       // o dataset original já vem agregado e interpolado: usa direto, mantendo as marcas de medido
       const grupos = {};
       sel.forEach((s) => { if (r.intervalos[s]?.length) grupos[s] = M.arraysDoBanco(r.intervalos[s]); });
-      this.definirDataset(grupos, {}, `dataset original da malha · ${Object.keys(grupos).length} SREs`);
+      this.dadosSite = { grupos, rotulo: `dados do site · ${Object.keys(grupos).length} SREs` };
+      this.combinar();
       this.status('rd-status-orig', `${linhas.length.toLocaleString('pt-BR')} intervalos de ${Object.keys(grupos).length} SREs prontos para rodar.`
         + (invalidos.length ? ` Ignorados (sem dados, situação diferente de DUP/PAV/EOD ou inexistentes): ${esc(invalidos.join(', '))}.` : ''));
     } catch (err) {
@@ -257,9 +262,24 @@ export class Rodar {
     const n = Object.keys(grupos).length;
     const nInt = Object.values(grupos).reduce((s, a) => s + a.ini.length, 0);
     const pd0 = Object.values(grupos).reduce((s, a) => s + a.d0_obs.filter(Boolean).length, 0) / Math.max(nInt, 1);
-    this.definirDataset(grupos, usuario, `${this.nomeArquivo} · ${n} SREs`);
+    this.dadosUp = { grupos, usuario, rotulo: `${this.nomeArquivo} · ${n} SREs` };
+    this.combinar();
     this.status('rd-status-up', `${n} SREs, ${nInt.toLocaleString('pt-BR')} intervalos; d0 medido em ${num(100 * pd0, 0)}% (o resto é interpolado como no notebook).`
       + (m.seg_usuario ? ` Sua segmentação foi lida e será comparada com a do modelo.` : ''));
+  }
+
+  // junta as fontes conforme a escolha; ao mesclar, os SREs da planilha substituem os do site com o mesmo código
+  combinar() {
+    const site = this.dadosSite, up = this.dadosUp;
+    if (this.fonte === 'original') return site ? this.definirDataset(site.grupos, {}, site.rotulo) : this.definirDataset({}, {}, 'Nenhum dataset escolhido.');
+    if (this.fonte === 'upload') return up ? this.definirDataset(up.grupos, up.usuario, up.rotulo) : this.definirDataset({}, {}, 'Nenhum dataset escolhido.');
+    const g = { ...(site?.grupos || {}) };
+    const subst = up ? Object.keys(up.grupos).filter((s) => s in g).length : 0;
+    Object.assign(g, up?.grupos || {});
+    const partes = [site ? site.rotulo : null, up ? up.rotulo : null].filter(Boolean);
+    this.definirDataset(g, up?.usuario || {}, partes.length
+      ? `mesclado: ${partes.join(' + ')} = ${Object.keys(g).length} SREs${subst ? ` (${subst} do site substituídos pela planilha)` : ''}`
+      : 'Escolha SREs do site e/ou envie uma planilha.');
   }
 
   definirDataset(grupos, usuario, rotulo) {
@@ -303,8 +323,9 @@ export class Rodar {
     const out = {};
     const malha = new Map(this.ctx.rede.sres.map((s) => [s.sre, s]));
     const sres = Object.keys(this.grupos || {});
-    sres.forEach((s) => { if (malha.has(s)) out[s] = { coords: malha.get(s).geom_mapa, origem: 'malha' }; });
-    if (this.geo) {
+    const modo = this.$('rd-geo-modo').value;
+    if (modo !== 'arquivo') sres.forEach((s) => { if (malha.has(s)) out[s] = { coords: malha.get(s).geom_mapa, origem: 'malha' }; });
+    if (this.geo && modo !== 'site') {
       const campo = this.$('rd-campo-sre').value;
       const inverter = this.$('rd-inverter').checked;
       const linhaDe = (f) => {
@@ -435,6 +456,7 @@ export class Rodar {
     GS.grafSinal(this.$('rd-graf-func'), a, cfg.func, r.func_s, { cor: '#7c3aed', altura: 260 });
     const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
     GS.grafSinal(this.$('rd-graf-estrut'), a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280 });
+    GS.grafUnido(this.$('rd-graf-unido'), a, r);
     GS.grafRegua(this.$('rd-graf-regua'), a, r, limites);
     let ins = GS.insights(a, r, limites, { sre: s });
     if (this.usuario?.[s]) ins = ins.replace('</p>', ` Sua segmentação × resultado do modelo: F1 ${num(M.f1Quebras(this.usuario[s], r.comb_km, this.res.p.BUFFER_KM).f1, 2)}.</p>`);

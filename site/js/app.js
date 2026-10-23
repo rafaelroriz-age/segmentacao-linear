@@ -7,7 +7,7 @@ import * as M from './modelo.js';
 import * as GS from './graficos_seg.js';
 import { referencia } from './calibracao.js';
 import { Sensibilidade } from './sensibilidade.js';
-import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
+import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
 import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -37,7 +37,7 @@ async function diagnosticar(msg) {
   testes.push([`Banco de dados (${url ? new URL(url).host : 'não configurado'})`, url
     ? fetch(`${url}/rest/v1/rpc/segmentos_rede`, { method: 'POST', headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_tipo: 'combinada' }) }).then((r) => r.ok)
     : Promise.resolve(false)]);
-  testes.push([`Mapa base (${new URL(URL_MAPA_BASE).host})`, new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = `${URL_MAPA_BASE}/World_Light_Gray_Base/MapServer/tile/0/0/0`; setTimeout(() => ok(false), 8000); })]);
+  testes.push([`Mapa base (${new URL(URL_MAPA_BASE).host})`, new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = urlTesteMapaBase(); setTimeout(() => ok(false), 8000); })]);
   const res = await Promise.all(testes.map(([n, p]) => p.then((v) => [n, !!v]).catch(() => [n, false])));
   lista.innerHTML = res.map(([n, ok]) => `<li class="${ok ? 'ok' : 'falha'}">${ok ? '✓' : '✕'} ${esc(n)} — ${ok ? 'acessível' : 'sem acesso'}</li>`).join('')
     + (res.some(([, ok]) => !ok) ? '<li>Itens com ✕ costumam ser bloqueio de rede, proxy ou firewall da empresa para esse endereço. Tente de outra rede (por exemplo, o celular) ou peça liberação ao TI.</li>' : '<li>Tudo acessível: recarregue com Ctrl+F5 para descartar arquivos antigos do navegador.</li>');
@@ -297,8 +297,9 @@ function desenharEtapasModelo(pac) {
   GS.grafSinal('graf-func-modelo', a, cfg.func, r.func_s, { cor: '#7c3aed', altura: 260 });
   const serieE = cfg.estrut === 'aca' ? M.sinalEstrutural(a, { ...cfg, modelo: 'normal' }) : a[cfg.estrut];
   GS.grafSinal('graf-estrut-modelo', a, cfg.estrut, r.estrut_s, { serie: serieE, modo: cfg.modelo === 'linear' ? 'reta' : 'media', altura: 280 });
+  GS.grafUnido('graf-unido-modelo', a, r);
   GS.grafRegua('graf-regua-modelo', a, r, limites);
-  ['graf-func-modelo', 'graf-estrut-modelo', 'graf-regua-modelo'].forEach((id) => estado.mira.ligar(id));
+  ['graf-func-modelo', 'graf-estrut-modelo', 'graf-unido-modelo', 'graf-regua-modelo'].forEach((id) => estado.mira.ligar(id));
   $('insights-modelo').innerHTML = GS.insights(a, r, limites, { sre: estado.sre });
   if (!M.ehPadrao(cfg)) {
     $('nota-modelo').innerHTML = `Parâmetros escolhidos: funcional <strong>${M.SINAIS_FUNC[cfg.func]}</strong>, estrutural <strong>${M.SINAIS_ESTRUT[cfg.estrut]}</strong> (PELT ${cfg.modelo}). `
@@ -555,7 +556,7 @@ aviso($('dl-sre-png'), async () => {
     document.querySelector('#abas-sre [data-aba="modelo"]').click();
     await new Promise((r) => setTimeout(r, 700));
   }
-  for (const [k, id, h] of [['1_funcional', 'graf-func-modelo', 620], ['2_estrutural', 'graf-estrut-modelo', 620], ['3_resultado', 'graf-regua-modelo', 380]]) {
+  for (const [k, id, h] of [['1_funcional', 'graf-func-modelo', 620], ['2_estrutural', 'graf-estrut-modelo', 620], ['3_unido', 'graf-unido-modelo', 700], ['4_resultado', 'graf-regua-modelo', 380]]) {
     await baixarPng(id, `${estado.sre}_${k}`, { largura: 1600, altura: h });
     await new Promise((ok) => setTimeout(ok, 400));
   }

@@ -1,4 +1,5 @@
 // Utilidades: formatação, classes de condição, referência linear (km → coordenada) e estatística.
+import { CONFIG } from './config.js';
 
 export const NOMES_PARAM = { iri: 'IRI', igg: 'IGG', d0: 'Deflexão (d0)' };
 export const UNIDADES = { iri: 'm/km', igg: '', d0: '0,01 mm' };
@@ -27,22 +28,37 @@ export function esc(s) {
 export const FONTE_UI = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 export const FONTE_MONO = '"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace';
 
-// ── mapa base cartográfico monocromático (Esri Light/Dark Gray Canvas), trocado junto com o tema ──
-// Sem chave de API: os basemaps da CARTO (Positron/Dark Matter) passaram a devolver marca d'água
-// "API KEY REQUIRED" sem chave. Os rótulos ficam numa camada separada, também em cinza.
+// ── mapa base cartográfico monocromático (CARTO Positron / Dark Matter), trocado junto com o tema ──
+// A CARTO exige chave (sem ela os tiles vêm com marca d'água "API KEY REQUIRED"). Se a chave faltar
+// ou os tiles falharem, cai para o Esri Light/Dark Gray Canvas, que não pede chave.
 const midiaEscura = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
 export function temaEscuro() {
   const t = document.documentElement.dataset.theme;
   return t ? t === 'dark' : !!midiaEscura?.matches;
 }
-export const URL_MAPA_BASE = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
+export const URL_MAPA_BASE = 'https://basemaps.cartocdn.com/rastertiles';
+const URL_ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
+const ATRIB_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+export const urlTesteMapaBase = () => `${URL_MAPA_BASE}/light_all/0/0/0.png?key=${CONFIG.CARTO_KEY}`;
+
 export function camadaBase(map) {
-  const url = (tipo) => `${URL_MAPA_BASE}/World_${temaEscuro() ? 'Dark' : 'Light'}_Gray_${tipo}/MapServer/tile/{z}/{y}/{x}`;
-  const opc = { maxNativeZoom: 16, maxZoom: 20 };
-  const base = L.tileLayer(url('Base'), { ...opc, attribution: 'Base: Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
-  const rotulos = L.tileLayer(url('Reference'), opc).addTo(map);
-  midiaEscura?.addEventListener('change', () => { base.setUrl(url('Base')); rotulos.setUrl(url('Reference')); });
-  return base;
+  const carto = () => `${URL_MAPA_BASE}/${temaEscuro() ? 'dark_all' : 'light_all'}/{z}/{x}/{y}.png?key=${CONFIG.CARTO_KEY}`;
+  const esri = (tipo) => `${URL_ESRI}/World_${temaEscuro() ? 'Dark' : 'Light'}_Gray_${tipo}/MapServer/tile/{z}/{y}/{x}`;
+  let camadas = [];
+  const usarEsri = () => {
+    camadas.forEach((c) => c.remove());
+    camadas = [
+      L.tileLayer(esri('Base'), { maxNativeZoom: 16, maxZoom: 20, attribution: `Base: Esri, HERE, Garmin, ${ATRIB_OSM}` }).addTo(map),
+      L.tileLayer(esri('Reference'), { maxNativeZoom: 16, maxZoom: 20 }).addTo(map),
+    ];
+    midiaEscura?.addEventListener('change', () => { camadas[0].setUrl(esri('Base')); camadas[1].setUrl(esri('Reference')); });
+  };
+  if (!CONFIG.CARTO_KEY) { usarEsri(); return; }
+  const base = L.tileLayer(carto(), { maxZoom: 20, attribution: `${ATRIB_OSM} &copy; <a href="https://carto.com/attributions">CARTO</a>` }).addTo(map);
+  camadas = [base];
+  let erros = 0;
+  base.on('tileerror', () => { if (++erros === 8 && camadas[0] === base) usarEsri(); });
+  midiaEscura?.addEventListener('change', () => { if (camadas[0] === base) base.setUrl(carto()); });
 }
 
 export function cssVar(nome) {
