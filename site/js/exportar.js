@@ -89,8 +89,11 @@ export function linhasSegmentosRede(segs, porSre, tipo) {
   return segs.map((g) => {
     const s = porSre.get(g.sre) || {};
     return { sre: g.sre, rodovia: s.rodovia ?? null, regional: s.regional ?? null, situacao: s.situacao ?? null, tipo, seg_id: g.seg_id,
-      km_inicial: g.km_inicial, km_final: g.km_final, comprimento_km: +(g.km_final - g.km_inicial).toFixed(3),
-      d0_medio: lim(g.d0_medio), igg_medio: lim(g.igg_medio), iri_medio: lim(g.iri_medio) };
+      km_inicial: g.km_inicial, km_final: g.km_final, comprimento_km: lim(g.comprimento_km) ?? +(g.km_final - g.km_inicial).toFixed(3),
+      n_intervalos: lim(g.n_intervalos),
+      d0_medio: lim(g.d0_medio), d0_desvio: lim(g.d0_desvio), d0_erro_padrao: lim(g.d0_erro_padrao), d0_cv: lim(g.d0_cv), d0_frac_medido: lim(g.d0_frac_medido),
+      igg_medio: lim(g.igg_medio), igg_desvio: lim(g.igg_desvio), igg_cv: lim(g.igg_cv),
+      iri_medio: lim(g.iri_medio), iri_desvio: lim(g.iri_desvio), iri_cv: lim(g.iri_cv), coerente: lim(g.coerente) };
   });
 }
 

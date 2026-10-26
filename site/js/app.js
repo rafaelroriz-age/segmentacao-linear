@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { modoLocal, carregarRede, carregarSre, carregarSegmentosRede, carregarIntervalos } from './dados.js';
+import { modoLocal, carregarRede, carregarSre, carregarSegmentosRede, carregarSegmentosRedeCompleto, carregarIntervalos } from './dados.js';
 import { Mapa } from './mapa.js';
 import { criarMira } from './mira.js';
 import * as G from './graficos.js';
@@ -525,17 +525,17 @@ const CAMPOS_SRE = ['sre', 'rodovia', 'classe_via', 'regional', 'situacao', 'jur
   'iri_medio', 'igg_medio', 'd0_medio', 'classe_iri', 'classe_igg', 'classe_d0', 'n_seg_funcional', 'n_seg_estrutural', 'n_seg_combinada', 'beta_estrut'];
 const linhasSres = () => estado.rede.sres.map((s) => Object.fromEntries(CAMPOS_SRE.map((k) => [k === 'beta_estrut' ? 'penalidade_estrutural' : k, s[k] ?? null])));
 
-aviso($('dl-sres-csv'), async () => baixarCsv('sres_resumo.csv', linhasSres()));
+aviso($('dl-sres-csv'), async () => baixarExcel('sres_resumo', { SRES: linhasSres() }));
 aviso($('dl-cond-png'), async () => baixarPng('graf-parametros', 'condicao_dos_pavimentos', { largura: 1400, altura: 520 }));
 aviso($('dl-malha-csv'), async () => {
   const tipo = $('tipo-mapa').value;
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
-  baixarCsv(`segmentos_${tipo}_malha.csv`, linhasSegmentosRede(await carregarSegmentosRede(tipo), porSre, tipo));
+  baixarExcel(`segmentos_${tipo}_malha`, { [tipo.toUpperCase()]: linhasSegmentosRede(await carregarSegmentosRedeCompleto(tipo), porSre, tipo) });
 });
 aviso($('dl-malha-xlsx'), async () => {
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
   const abas = {};
-  for (const t of TIPOS) abas[t.toUpperCase()] = linhasSegmentosRede(await carregarSegmentosRede(t), porSre, t);
+  for (const t of TIPOS) abas[t.toUpperCase()] = linhasSegmentosRede(await carregarSegmentosRedeCompleto(t), porSre, t);
   abas.SRES = linhasSres();
   abas.PARAMETROS = estado.rede.parametros.map((p) => ({ parametro: p.parametro, valor: p.valor }));
   await baixarExcel('segmentacao_malha', abas);
@@ -548,7 +548,7 @@ aviso($('dl-sre-xlsx'), async () => {
 aviso($('dl-sre-csv'), async () => {
   if (!estado.pac) return;
   const linhas = linhasTabela(estado.pac).map((s) => ({ sre: estado.sre, tipo: s.tipo, fator: s.fator, ...Object.fromEntries(COLS_SEG.map(([k]) => [k, s[k]])) }));
-  baixarCsv(`${estado.sre}_${estado.tipoTabela}.csv`, linhas);
+  await baixarExcel(`${estado.sre}_${estado.tipoTabela}`, { [estado.tipoTabela.toUpperCase()]: linhas });
 });
 aviso($('dl-sre-png'), async () => {
   if (!estado.pac) return;

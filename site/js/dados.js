@@ -56,6 +56,20 @@ export function carregarSegmentosRede(tipo) {
   return cacheSegRede.get(tipo);
 }
 
+// segmentos da malha com todas as estatísticas da planilha do SRE (só para download)
+const CAMPOS_COMPLETO = ['sre', 'seg_id', 'km_inicial', 'km_final', 'comprimento_km', 'n_intervalos', 'd0_medio', 'd0_desvio', 'd0_erro_padrao', 'd0_cv', 'd0_frac_medido',
+  'igg_medio', 'igg_desvio', 'igg_cv', 'iri_medio', 'iri_desvio', 'iri_cv', 'coerente'];
+const cacheSegCompleto = new Map();
+export function carregarSegmentosRedeCompleto(tipo) {
+  if (!cacheSegCompleto.has(tipo)) {
+    const p = (local ? json(`segmentos_completo_${tipo}.json`) : rpc('segmentos_rede_completo', { p_tipo: tipo }))
+      .then((linhas) => linhas.map((l) => Object.fromEntries(CAMPOS_COMPLETO.map((k, i) => [k, l[i]]))));
+    cacheSegCompleto.set(tipo, p);
+    p.catch(() => cacheSegCompleto.delete(tipo));
+  }
+  return cacheSegCompleto.get(tipo);
+}
+
 // intervalos de 200 m (dataset original) de vários SREs; com geom = true também a geometria detalhada
 export async function carregarIntervalos(sres, geom = false) {
   const out = { intervalos: {}, geom: {} };
