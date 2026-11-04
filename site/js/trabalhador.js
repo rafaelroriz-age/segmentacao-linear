@@ -9,7 +9,8 @@ const progresso = (etapa, feito, total) => postMessage({ tipo: 'progresso', etap
 
 onmessage = (ev) => {
   try {
-    const r = ev.data.tipo === 'calibrar' ? calibrar(ev.data) : rodar(ev.data.grupos, ev.data.cfg);
+    const t = ev.data.tipo;
+    const r = t === 'calibrar' ? calibrar(ev.data) : t === 'malha' ? malha(ev.data) : rodar(ev.data.grupos, ev.data.cfg);
     postMessage({ tipo: 'fim', resultado: r });
   } catch (err) {
     postMessage({ tipo: 'erro', mensagem: err.message || String(err) });
@@ -36,6 +37,23 @@ function calibrar({ grupos, cfg, estrut, func }) {
     out.alpha = c ? c.alpha : null;
   }
   return out;
+}
+
+// segmentação de toda a malha com penalidades de referência fixas (as mesmas da tela do SRE)
+function malha({ grupos, cfg, ref }) {
+  const p = M.PADRAO;
+  const porTipo = { funcional: [], estrutural: [], combinada: [] };
+  const porSre = {};
+  const sres = Object.keys(grupos);
+  sres.forEach((s, i) => {
+    const a = grupos[s];
+    const cam = M.temEstrut(a, cfg, p) ? M.caminhoSre(a, ref.betaMin, p, cfg) : null;
+    const r = M.segmentarSre(a, { alphaFunc: ref.alpha, beta: ref.beta, cam, p, auditar: false, cfg });
+    for (const g of r.segmentos()) { const { tipo, ...resto } = g; porTipo[tipo].push({ sre: s, ...resto }); }
+    porSre[s] = { n_func: r.func_s.length + 1, n_estrut: cam ? r.estrut_s.length + 1 : null, n_comb: r.comb_s.length + 1, beta: r.beta, pen_func: r.pen_func };
+    if (i % 50 === 0) progresso('Segmentando a malha com os parâmetros escolhidos', i, sres.length);
+  });
+  return { porTipo, porSre };
 }
 
 function rodar(grupos, cfg) {

@@ -68,9 +68,17 @@ export async function baixarPng(el, nome, { largura = 1600, altura = null } = {}
 const lim = (v) => (v === undefined ? null : v);
 
 /** pacote do SRE (dados_sre) → abas no formato do notebook */
-export function abasDoSre(pac, parametros = []) {
-  const linhasSeg = (tipo) => pac.segmentos.filter((g) => g.tipo === tipo && g.fator === 1).sort((a, b) => a.seg_id - b.seg_id)
+export function abasDoSre(pac, parametros = [], segsCfg = null) {
+  const base = segsCfg || pac.segmentos;
+  const linhasSeg = (tipo) => base.filter((g) => g.tipo === tipo && (segsCfg || g.fator === 1)).sort((a, b) => a.seg_id - b.seg_id)
     .map(({ fator, tipo: t, ...g }) => ({ sre: pac.sre.sre, ...g }));
+  if (segsCfg) {   // parâmetros fora do padrão: auditoria, cenários e CROPS do banco são do modelo padrão e ficam de fora
+    return {
+      FUNCIONAL: linhasSeg('funcional'), ESTRUTURAL: linhasSeg('estrutural'), COMBINADA: linhasSeg('combinada'),
+      DADOS_200M: pac.intervalos.map((iv, i) => ({ sre: pac.sre.sre, intervalo: i + 1, ...iv })),
+      PARAMETROS: parametros.map((p) => ({ parametro: p.parametro, valor: p.valor })),
+    };
+  }
   return {
     FUNCIONAL: linhasSeg('funcional'),
     ESTRUTURAL: linhasSeg('estrutural'),

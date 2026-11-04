@@ -25,14 +25,26 @@ export async function referencia(cfg, rede, progresso = () => {}) {
   const fun = precisaFunc ? ler(chaveFunc(meta, cfg)) : { alpha: base.alpha };
   if (est && fun) return { ...est, ...fun, origem: 'calibrado' };
 
-  if (!gruposMalha) {
-    const sres = rede.sres.filter((s) => s.tem_dados).map((s) => s.sre);
-    progresso(`Lendo os intervalos de ${sres.length.toLocaleString('pt-BR')} SREs para calibrar a penalidade…`);
-    const r = await carregarIntervalos(sres, false);
-    gruposMalha = {};
-    for (const [s, iv] of Object.entries(r.intervalos)) if (iv.length) gruposMalha[s] = arraysDoBanco(iv);
-  }
-  const res = await new Promise((ok, falha) => {
+  await carregarGrupos(rede, progresso, 'para calibrar a penalidade');
+  const res = await trabalhar({ tipo: 'calibrar', grupos: gruposMalha, cfg, estrut: !est, func: !fun }, progresso);
+  const e2 = est || { beta: res.betaRede, betaMin: res.betaMin, diag: res.diag };
+  const f2 = fun || { alpha: res.alpha };
+  if (!est) gravar(chaveEst(meta, cfg), e2);
+  if (!fun) gravar(chaveFunc(meta, cfg), f2);
+  return { ...e2, ...f2, origem: 'calibrado' };
+}
+
+async function carregarGrupos(rede, progresso, motivo) {
+  if (gruposMalha) return;
+  const sres = rede.sres.filter((s) => s.tem_dados).map((s) => s.sre);
+  progresso(`Lendo os intervalos de ${sres.length.toLocaleString('pt-BR')} SREs ${motivo}…`);
+  const r = await carregarIntervalos(sres, false);
+  gruposMalha = {};
+  for (const [s, iv] of Object.entries(r.intervalos)) if (iv.length) gruposMalha[s] = arraysDoBanco(iv);
+}
+
+function trabalhar(msg, progresso) {
+  return new Promise((ok, falha) => {
     const w = new Worker(new URL('./trabalhador.js', import.meta.url), { type: 'module' });
     w.onmessage = (ev) => {
       const m = ev.data;
@@ -40,11 +52,25 @@ export async function referencia(cfg, rede, progresso = () => {}) {
       else { w.terminate(); m.tipo === 'erro' ? falha(new Error(m.mensagem)) : ok(m.resultado); }
     };
     w.onerror = (e) => { w.terminate(); falha(new Error(e.message)); };
-    w.postMessage({ tipo: 'calibrar', grupos: gruposMalha, cfg, estrut: !est, func: !fun });
+    w.postMessage(msg);
   });
-  const e2 = est || { beta: res.betaRede, betaMin: res.betaMin, diag: res.diag };
-  const f2 = fun || { alpha: res.alpha };
-  if (!est) gravar(chaveEst(meta, cfg), e2);
-  if (!fun) gravar(chaveFunc(meta, cfg), f2);
-  return { ...e2, ...f2, origem: 'calibrado' };
+}
+
+// segmentação de toda a malha para uma combinação de parâmetros fora do padrão (mapa e planilhas da malha).
+// Usa as mesmas penalidades de referência da tela do SRE (ref), então o SRE isolado e a malha batem.
+const cacheMalha = new Map();
+export const chaveCfg = (cfg) => `${cfg.func}|${cfg.estrut}|${cfg.modelo}`;
+
+/** { porTipo: {funcional, estrutural, combinada: [segmentos com sre]}, porSre: {sre: {n_func, n_estrut, n_comb, beta, pen_func}} } */
+export function segmentacaoMalha(cfg, ref, rede, progresso = () => {}) {
+  const k = `${chaveCfg(cfg)}|${ref.beta}|${ref.betaMin}|${ref.alpha}`;
+  if (!cacheMalha.has(k)) {
+    const p = (async () => {
+      await carregarGrupos(rede, progresso, 'para segmentar a malha');
+      return trabalhar({ tipo: 'malha', grupos: gruposMalha, cfg, ref: { beta: ref.beta, betaMin: ref.betaMin, alpha: ref.alpha } }, progresso);
+    })();
+    cacheMalha.set(k, p);
+    p.catch(() => cacheMalha.delete(k));
+  }
+  return cacheMalha.get(k);
 }

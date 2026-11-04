@@ -5,7 +5,7 @@ import { criarMira } from './mira.js';
 import * as G from './graficos.js';
 import * as M from './modelo.js';
 import * as GS from './graficos_seg.js';
-import { referencia } from './calibracao.js';
+import { referencia, segmentacaoMalha } from './calibracao.js';
 import { Sensibilidade } from './sensibilidade.js';
 import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
 import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
@@ -13,6 +13,34 @@ import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './export
 const $ = (id) => document.getElementById(id);
 const estado = { cfg: { ...M.CFG_PADRAO }, ref: null,  rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
 const CHAVE_KM = { funcional: 'func_km', estrutural: 'estrut_km', combinada: 'comb_km' };
+const padrao = () => M.ehPadrao(estado.cfg);
+const sufixoCfg = () => (padrao() ? '' : `_${estado.cfg.func}_${estado.cfg.estrut}_${estado.cfg.modelo}`);
+
+// segmentação da malha: do banco (modelo padrão IGG + D0) ou calculada no navegador para os parâmetros escolhidos
+async function resultadoMalha() {
+  const ref = estado.ref || { beta: estado.rede.meta.beta_rede, betaMin: estado.rede.meta.beta_min, alpha: estado.rede.meta.alpha_km_func };
+  try {
+    return await segmentacaoMalha(estado.cfg, ref, estado.rede, (t) => carregando(t));
+  } finally {
+    carregando(null);
+  }
+}
+async function segmentosMalha(tipo, completo) {
+  if (padrao()) return completo ? carregarSegmentosRedeCompleto(tipo) : carregarSegmentosRede(tipo);
+  return (await resultadoMalha()).porTipo[tipo];
+}
+
+// segmentos do SRE aberto (fator 1): do banco no padrão, calculados com os parâmetros escolhidos fora dele
+function segmentosSre(pac) {
+  if (padrao() || !estado.a) return pac.segmentos.filter((g) => g.fator === 1);
+  const chave = `${estado.sre}|${JSON.stringify(estado.cfg)}|${JSON.stringify(estado.ref)}`;
+  if (estado.segCfg?.chave !== chave) {
+    const ctx = contextoSre(pac, estado.a);
+    const r = M.segmentarSre(estado.a, { alphaFunc: ctx.alphaRef, beta: ctx.betaRef, cam: ctx.cam, cfg: ctx.cfg, auditar: false });
+    estado.segCfg = { chave, segs: r.segmentos().map((g) => ({ ...g, fator: 1 })) };
+  }
+  return estado.segCfg.segs;
+}
 
 // ── carregamento ──────────────────────────────────────────────────────────────
 function carregando(txt) {
@@ -114,7 +142,7 @@ function montarPainel() {
   });
 
   estado.mapa = new Mapa('mapa', selecionarSre, {
-    segmentos: carregarSegmentosRede,
+    segmentos: (tipo) => segmentosMalha(tipo, false),
     intervalos: (lista) => carregarIntervalos(lista, true),
   }, (info) => {
     $('nivel-texto').textContent = info.texto;
@@ -168,8 +196,8 @@ function redesenharDetalheMapa() {
     estado.mapa.desenharDetalhe(pac, passo[CHAVE_KM[tipo]], rotulo.replace('combinada', tipo));
     return;
   }
-  const segs = pac.segmentos.filter((g) => g.fator === 1 && g.tipo === tipo).sort((a, b) => a.seg_id - b.seg_id);
-  estado.mapa.desenharDetalhe(pac, segs.slice(1).map((g) => g.km_inicial), `${tipo}, modelo atual`, segs);
+  const segs = segmentosSre(pac).filter((g) => g.tipo === tipo).sort((a, b) => a.seg_id - b.seg_id);
+  estado.mapa.desenharDetalhe(pac, segs.slice(1).map((g) => g.km_inicial), `${tipo}, ${padrao() ? 'modelo atual' : `funcional ${M.SINAIS_FUNC[estado.cfg.func]}`}`, segs);
 }
 
 // ── detalhe do SRE ───────────────────────────────────────────────────────────
@@ -303,7 +331,7 @@ function desenharEtapasModelo(pac) {
   $('insights-modelo').innerHTML = GS.insights(a, r, limites, { sre: estado.sre });
   if (!M.ehPadrao(cfg)) {
     $('nota-modelo').innerHTML = `Parâmetros escolhidos: funcional <strong>${M.SINAIS_FUNC[cfg.func]}</strong>, estrutural <strong>${M.SINAIS_ESTRUT[cfg.estrut]}</strong> (PELT ${cfg.modelo}). `
-      + `Resultado: ${r.func_s.length + 1} funcionais · ${r.estrut_s.length + 1} estruturais · ${r.comb_s.length + 1} funcional + estrutural. O mapa e as planilhas continuam mostrando o modelo padrão (IGG + D0).`;
+      + `Resultado: ${r.func_s.length + 1} funcionais · ${r.estrut_s.length + 1} estruturais · ${r.comb_s.length + 1} funcional + estrutural. O mapa, a planilha de saída e os downloads usam estes parâmetros.`;
   }
 }
 
@@ -349,10 +377,14 @@ const COLS_SEG = [
 ];
 
 function linhasTabela(pac) {
+  if (!padrao()) return segmentosSre(pac).filter((s) => s.tipo === estado.tipoTabela).sort((a, b) => a.seg_id - b.seg_id);
   return pac.segmentos.filter((s) => s.tipo === estado.tipoTabela && s.fator === estado.fatorTabela).sort((a, b) => a.seg_id - b.seg_id);
 }
 
 function desenharTabela(pac) {
+  // os cenários (fatores da penalidade) só existem para o modelo padrão gravado no banco
+  $('sel-fator-tabela').disabled = !padrao();
+  if (!padrao()) $('sel-fator-tabela').value = '1';
   const linhas = linhasTabela(pac);
   const corpo = linhas.map((s) => `<tr>${COLS_SEG.map(([k, , casas]) => (casas < 0 ? okFalha(s[k]) : `<td>${casas === 0 ? s[k] ?? '—' : num(s[k], casas)}</td>`)).join('')}</tr>`).join('');
   $('tab-segmentos').innerHTML = `<table><thead><tr>${COLS_SEG.map(([, r]) => `<th>${r}</th>`).join('')}</tr></thead><tbody>${corpo || '<tr><td>Sem segmentos.</td></tr>'}</tbody></table>`;
@@ -370,7 +402,7 @@ $('sel-fator-tabela').addEventListener('change', (e) => {
 $('btn-csv').addEventListener('click', () => {
   if (!estado.pac) return;
   const linhas = linhasTabela(estado.pac).map((s) => ({ sre: estado.sre, tipo: s.tipo, fator: s.fator, ...Object.fromEntries(COLS_SEG.map(([k]) => [k, s[k]])) }));
-  baixarCsv(`${estado.sre}_${estado.tipoTabela}_${fatorTxt(estado.fatorTabela)}.csv`, linhas);
+  baixarCsv(`${estado.sre}_${estado.tipoTabela}_${fatorTxt(estado.fatorTabela)}${sufixoCfg()}.csv`, linhas);
 });
 
 // ── dados de 200 m ───────────────────────────────────────────────────────────
@@ -477,11 +509,19 @@ window.addEventListener('resize', () => { if (estado.pac) G.redimensionar($('det
 // ── parâmetros do modelo (funcional, estrutural e modelo do PELT), iguais nas duas barras ──
 function ligarParametros() {
   const barras = [...document.querySelectorAll('[data-parametros]')];
-  const sincronizar = () => barras.forEach((b) => {
-    b.querySelector('[data-p="func"]').value = estado.cfg.func;
-    b.querySelector('[data-p="estrut"]').value = estado.cfg.estrut;
-    b.querySelector('[data-p="modelo"]').value = estado.cfg.modelo;
-  });
+  const funcMapa = $('func-mapa');
+  const sincronizar = () => {
+    barras.forEach((b) => {
+      b.querySelector('[data-p="func"]').value = estado.cfg.func;
+      b.querySelector('[data-p="estrut"]').value = estado.cfg.estrut;
+      b.querySelector('[data-p="modelo"]').value = estado.cfg.modelo;
+    });
+    funcMapa.value = estado.cfg.func;
+    const opt = (v) => $('tipo-mapa').querySelector(`option[value="${v}"]`);
+    opt('funcional').textContent = `Funcional (${M.SINAIS_FUNC[estado.cfg.func]})`;
+    opt('estrutural').textContent = `Estrutural (${M.SINAIS_ESTRUT[estado.cfg.estrut]})`;
+  };
+  const todos = () => [...barras.flatMap((x) => [...x.querySelectorAll('select')]), funcMapa];
   const status = (txt) => barras.forEach((b) => { b.querySelector('[data-p-estado]').innerHTML = txt; });
   const resumoRef = () => {
     const r = estado.ref, cfg = estado.cfg;
@@ -489,12 +529,13 @@ function ligarParametros() {
       ? `Modelo padrão do notebook: penalidade estrutural ${num(r.beta, 2)}, α_km ${num(r.alpha, 4)}.`
       : `Penalidade de referência recalculada para esta combinação (cotovelo da malha): estrutural ${num(r.beta, 2)}, α_km ${num(r.alpha, 4)}.`);
   };
-  barras.forEach((b) => b.querySelectorAll('select').forEach((sel) => sel.addEventListener('change', async () => {
-    const novo = { ...estado.cfg, [sel.dataset.p]: sel.value };
-    if (sel.dataset.p === 'estrut') novo.modelo = M.MODELO_PADRAO[sel.value];   // modelo sugerido para o sinal
+  todos().forEach((sel) => sel.addEventListener('change', async () => {
+    const chave = sel === funcMapa ? 'func' : sel.dataset.p;
+    const novo = { ...estado.cfg, [chave]: sel.value };
+    if (chave === 'estrut') novo.modelo = M.MODELO_PADRAO[sel.value];   // modelo sugerido para o sinal
     estado.cfg = novo;
     sincronizar();
-    barras.forEach((x) => x.querySelectorAll('select').forEach((s) => { s.disabled = true; }));
+    todos().forEach((s) => { s.disabled = true; });
     try {
       estado.ref = await referencia(novo, estado.rede, (t) => status(`<span class="spinner"></span> ${esc(t)}`));
       resumoRef();
@@ -502,12 +543,15 @@ function ligarParametros() {
       status(`Não foi possível calibrar: ${esc(err.message)}. Usando as penalidades do modelo padrão.`);
       estado.ref = null;
     } finally {
-      barras.forEach((x) => x.querySelectorAll('select').forEach((s) => { s.disabled = false; }));
+      todos().forEach((s) => { s.disabled = false; });
     }
     estado.sensSre = null;
-    if (estado.pac) desenharAba(abaAtiva());
+    // mapa: troca a segmentação da malha (banco no padrão; calculada no navegador fora dele)
+    estado.mapa.segRede = {};
+    estado.mapa.redesenharTudo();
+    if (estado.pac) { redesenharDetalheMapa(); desenharAba(abaAtiva()); }
     if (estado.sensRedeSre && document.querySelector('#pagina-rede').classList.contains('ativa')) analisarSre(estado.sensRedeSre);
-  })));
+  }));
   sincronizar();
   estado.ref = { beta: estado.rede.meta.beta_rede, betaMin: estado.rede.meta.beta_min, alpha: estado.rede.meta.alpha_km_func };
   resumoRef();
@@ -523,32 +567,48 @@ const aviso = (btn, fn) => btn.addEventListener('click', async () => {
 });
 const CAMPOS_SRE = ['sre', 'rodovia', 'classe_via', 'regional', 'situacao', 'jurisdicao', 'trecho', 'inicio', 'fim', 'km_inicial', 'km_final', 'extensao_km', 'tem_dados', 'n_intervalos',
   'iri_medio', 'igg_medio', 'd0_medio', 'classe_iri', 'classe_igg', 'classe_d0', 'n_seg_funcional', 'n_seg_estrutural', 'n_seg_combinada', 'beta_estrut'];
-const linhasSres = () => estado.rede.sres.map((s) => Object.fromEntries(CAMPOS_SRE.map((k) => [k === 'beta_estrut' ? 'penalidade_estrutural' : k, s[k] ?? null])));
+const linhasSres = (res = null) => estado.rede.sres.map((s) => {
+  const l = Object.fromEntries(CAMPOS_SRE.map((k) => [k === 'beta_estrut' ? 'penalidade_estrutural' : k, s[k] ?? null]));
+  if (res) {   // contagens recalculadas com os parâmetros escolhidos
+    const q = res.porSre[s.sre];
+    Object.assign(l, { n_seg_funcional: q?.n_func ?? null, n_seg_estrutural: q?.n_estrut ?? null, n_seg_combinada: q?.n_comb ?? null, penalidade_estrutural: q?.beta ?? null });
+  }
+  return l;
+});
+// parâmetros do banco + a combinação escolhida (quando fora do padrão)
+function linhasParametros() {
+  const base = estado.rede.parametros.map((p) => ({ parametro: p.parametro, valor: p.valor }));
+  if (padrao()) return base;
+  const r = estado.ref || {};
+  return [{ parametro: 'parametro_funcional', valor: M.SINAIS_FUNC[estado.cfg.func] }, { parametro: 'parametro_estrutural', valor: M.SINAIS_ESTRUT[estado.cfg.estrut] },
+    { parametro: 'modelo_pelt_estrutural', valor: estado.cfg.modelo }, { parametro: 'penalidade_estrutural_referencia', valor: r.beta },
+    { parametro: 'alpha_km_funcional', valor: r.alpha }, { parametro: 'penalidade_minima_varredura', valor: r.betaMin }, ...base];
+}
 
-aviso($('dl-sres-csv'), async () => baixarExcel('sres_resumo', { SRES: linhasSres() }));
+aviso($('dl-sres-csv'), async () => baixarExcel(`sres_resumo${sufixoCfg()}`, { SRES: linhasSres(padrao() ? null : await resultadoMalha()) }));
 aviso($('dl-cond-png'), async () => baixarPng('graf-parametros', 'condicao_dos_pavimentos', { largura: 1400, altura: 520 }));
 aviso($('dl-malha-csv'), async () => {
   const tipo = $('tipo-mapa').value;
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
-  baixarExcel(`segmentos_${tipo}_malha`, { [tipo.toUpperCase()]: linhasSegmentosRede(await carregarSegmentosRedeCompleto(tipo), porSre, tipo) });
+  baixarExcel(`segmentos_${tipo}_malha${sufixoCfg()}`, { [tipo.toUpperCase()]: linhasSegmentosRede(await segmentosMalha(tipo, true), porSre, tipo) });
 });
 aviso($('dl-malha-xlsx'), async () => {
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
   const abas = {};
-  for (const t of TIPOS) abas[t.toUpperCase()] = linhasSegmentosRede(await carregarSegmentosRedeCompleto(t), porSre, t);
-  abas.SRES = linhasSres();
-  abas.PARAMETROS = estado.rede.parametros.map((p) => ({ parametro: p.parametro, valor: p.valor }));
-  await baixarExcel('segmentacao_malha', abas);
+  for (const t of TIPOS) abas[t.toUpperCase()] = linhasSegmentosRede(await segmentosMalha(t, true), porSre, t);
+  abas.SRES = linhasSres(padrao() ? null : await resultadoMalha());
+  abas.PARAMETROS = linhasParametros();
+  await baixarExcel(`segmentacao_malha${sufixoCfg()}`, abas);
 });
 
 aviso($('dl-sre-xlsx'), async () => {
   if (!estado.pac) return;
-  await baixarExcel(`${estado.sre}_segmentacao`, abasDoSre(estado.pac, estado.rede.parametros));
+  await baixarExcel(`${estado.sre}_segmentacao${sufixoCfg()}`, padrao() ? abasDoSre(estado.pac, estado.rede.parametros) : abasDoSre(estado.pac, linhasParametros(), segmentosSre(estado.pac)));
 });
 aviso($('dl-sre-csv'), async () => {
   if (!estado.pac) return;
   const linhas = linhasTabela(estado.pac).map((s) => ({ sre: estado.sre, tipo: s.tipo, fator: s.fator, ...Object.fromEntries(COLS_SEG.map(([k]) => [k, s[k]])) }));
-  await baixarExcel(`${estado.sre}_${estado.tipoTabela}`, { [estado.tipoTabela.toUpperCase()]: linhas });
+  await baixarExcel(`${estado.sre}_${estado.tipoTabela}${sufixoCfg()}`, { [estado.tipoTabela.toUpperCase()]: linhas });
 });
 aviso($('dl-sre-png'), async () => {
   if (!estado.pac) return;
