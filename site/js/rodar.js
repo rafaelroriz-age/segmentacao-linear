@@ -30,6 +30,7 @@ const COLUNAS = [
   ['d0', 'd0 (deflexão)', false, ['d0', 'deflexao', 'deflexão', 'd0_medio', 'def']],
   ['igg', 'IGG', false, ['igg', 'igg_medio']],
   ['iri_medio', 'IRI', false, ['iri_medio', 'iri', 'irimedio']],
+  ['sentido', 'sentido / pista (opcional)', false, ['sentido', 'pista', 'sentido_pista']],
   ['sre_segmento', 'nº do intervalo (opcional)', false, ['sre_segmento', 'segmento_200', 'intervalo']],
   ['seg_usuario', 'sua segmentação (opcional)', false, ['seg_usuario', 'segmento_homogeneo', 'seg_id', 'segmento']],
 ];
@@ -250,7 +251,7 @@ export class Rodar {
     const usuario = {};
     if (m.seg_usuario) {
       const porSre = {};
-      linhas.forEach((l) => { const s = String(l.sre ?? '').trim(); if (s) (porSre[s] ||= []).push(l); });
+      linhas.forEach((l) => { const s = M.chaveSre(l.sre, l.sentido); if (s) (porSre[s] ||= []).push(l); });
       for (const [s, ls] of Object.entries(porSre)) {
         ls.sort((x, y) => Number(String(x.km_inicial).replace(',', '.')) - Number(String(y.km_inicial).replace(',', '.')));
         const q = [];

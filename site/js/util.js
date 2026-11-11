@@ -20,6 +20,10 @@ export function num(v, casas = 2) {
 export const km = (v) => num(v, 3);
 export const fatorTxt = (f) => `${String(+f.toFixed(2)).replace('.', ',')}x`;
 
+/** nome de exibição: na duplicada cada pista é uma série própria (SRE + C/D) */
+export const NOMES_PISTA = { crescente: 'pista crescente', decrescente: 'pista decrescente' };
+export const rotuloSre = (s) => (s && s.sentido ? `${s.sre_base || s.sre} · ${NOMES_PISTA[s.sentido] || s.sentido}` : s?.sre ?? '');
+
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

@@ -25,6 +25,7 @@ RAIZ = os.path.dirname(AQUI)
 NOTEBOOK = os.path.join(RAIZ, 'segmentacao_rede_v8_sensibilidade.ipynb')
 SHAPE_SRE = os.path.join(RAIZ, 'sre-09-2026', 'shape-sres-6aa7eaf5ad9a4.shp')
 SAIDA_DB = os.path.join(AQUI, 'dados')
+SHAPE_CRS = 'EPSG:4674'   # SIRGAS 2000 geografico (crs do shape)
 SAIDA_SITE = os.path.join(RAIZ, 'site', 'dados-local')
 
 # So entram no modelo e no site os SREs pavimentados: pavimentada, duplicada e em obras de duplicacao.
@@ -219,10 +220,13 @@ def rodar_notebook():
         if i == 3:   # depois da leitura: so os SREs das SITUACOES, antes de qualquer calibracao
             eleg = set(sres_elegiveis())
             antes = len(ns['sres'])
-            ns['df'] = ns['df'][ns['df']['sre'].isin(eleg)].reset_index(drop=True)
-            ns['sres'] = [s for s in ns['sres'] if s in eleg]
-            ns['grupos'] = {s: a for s, a in ns['grupos'].items() if s in eleg}
-            log(f'filtro {SITUACOES} + {JURISDICAO} + principal={PRINCIPAL}: {len(ns["sres"])} de {antes} SREs, {len(ns["df"])} intervalos')
+            # o filtro e pelo SRE do shape (sre_base): numa duplicada as duas pistas (SRE + C/D) entram juntas
+            ns['df'] = ns['df'][ns['df']['sre_base'].isin(eleg)].reset_index(drop=True)
+            ns['sres'] = sorted(ns['df']['sre'].unique().tolist())
+            ns['grupos'] = {s: a for s, a in ns['grupos'].items() if s in set(ns['sres'])}
+            log(f'filtro {SITUACOES} + {JURISDICAO} + principal={PRINCIPAL}: {len(ns["sres"])} de {antes} series, {len(ns["df"])} intervalos')
+            n_pistas = int((ns['df']['sre'] != ns['df']['sre_base']).groupby(ns['df']['sre']).any().sum())
+            log(f'  duplicadas: {n_pistas} pistas segmentadas separadamente (SRE + C/D)')
     shutil.rmtree(tmp, ignore_errors=True)
     if ns['SENS_ALVO'] != 'estrutural':
         log("AVISO: SENS_ALVO != 'estrutural'; o site descreve a sensibilidade do beta estrutural")
@@ -250,13 +254,65 @@ def coords(geom, tol):
     return [[round(x, CASAS_COORD), round(y, CASAS_COORD)] for x, y in g.coords]
 
 
+DESLOC_PISTA_M = 20.0   # duplicada: cada pista e desenhada a 20 m do eixo do shape, do seu lado da via
+CRS_METRICO = 'EPSG:31982'   # SIRGAS 2000 / UTM 22S (Goias)
+
+
+def deslocar_pista(geom, sentido):
+    """Linha paralela ao eixo para a pista da duplicada (mao direita: crescente a direita do sentido do km).
+    Sem sentido (pista simples) devolve a propria geometria."""
+    if sentido is None:
+        return geom
+    from pyproj import Transformer
+    from shapely.ops import transform
+    ida = Transformer.from_crs(SHAPE_CRS, CRS_METRICO, always_xy=True).transform
+    volta = Transformer.from_crs(CRS_METRICO, SHAPE_CRS, always_xy=True).transform
+    d = -DESLOC_PISTA_M if sentido == 'crescente' else DESLOC_PISTA_M   # offset_curve: positivo = esquerda
+    try:
+        off = transform(ida, geom).offset_curve(d, join_style='mitre', mitre_limit=2.0)
+    except Exception:
+        return geom
+    if off.geom_type != 'LineString' or off.is_empty or len(off.coords) < 2:
+        return geom
+    off = transform(volta, off)
+    p0 = geom.coords[0]
+    if (off.coords[-1][0] - p0[0]) ** 2 + (off.coords[-1][1] - p0[1]) ** 2 < (off.coords[0][0] - p0[0]) ** 2 + (off.coords[0][1] - p0[1]) ** 2:
+        off = type(off)(list(off.coords)[::-1])   # mantem o km crescendo do inicio para o fim
+    return off
+
+
+def linha_sre(r, s, sentido, geom, med, ref, grupos):
+    """Linha da tabela sre para a serie s (SRE ou pista C/D da duplicada) do registro r do shape."""
+    m = med.loc[s] if s in med.index else pd.Series(dtype=float)
+    c = ref.loc[s] if s in ref.index else None
+    row = {
+        'sre': s, 'sre_base': r.sre, 'sentido': sentido,
+        'rodovia': r.go, 'classe_via': r.classe, 'inicio': r.inicio, 'fim': r.fim,
+        'km_inicial': round(float(r.km_inicial), 3), 'km_final': round(float(r.km_final), 3),
+        'extensao_km': round(float(r.extensao), 3), 'situacao': r.situacao, 'jurisdicao': r.jurisdicao,
+        'regional': int(r.regional) if pd.notna(r.regional) else None, 'trecho': r.trecho,
+        'perimetro_urbano': r.perim_urb == 's', 'federal': r.federal if isinstance(r.federal, str) else None,
+        'tem_dados': s in grupos,
+        'n_intervalos': int(len(grupos[s]['ini'])) if s in grupos else 0,
+        'iri_medio': m.get('iri_medio'), 'igg_medio': m.get('igg_medio'), 'd0_medio': m.get('d0_medio'),
+        'n_seg_funcional': int(c['quebras_func']) + 1 if c is not None else None,
+        'n_seg_estrutural': int(c['quebras_estrut']) + 1 if c is not None else None,
+        'n_seg_combinada': int(c['quebras_comb']) + 1 if c is not None else None,
+        'beta_estrut': c['beta_estrut'] if c is not None else None,
+        'geom_mapa': coords(geom, TOL_GEOM_MAPA),
+    }
+    for p in ('iri', 'igg', 'd0'):
+        row[f'classe_{p}'] = classe_de(row[f'{p}_medio'], p)
+    return row
+
+
 def montar_tabelas(ns):
     df, grupos, sres = ns['df'], ns['grupos'], ns['sres']
     FATORES, PLOTS, I_REF = ns['FATORES'], ns['PLOTS'], ns['I_REF']
 
     # intervalos de 200 m (sinais usados pelo modelo; *_obs = medido antes da interpolacao)
-    bruto = pd.read_excel(ns['INPUT_FILE'], usecols=lambda c: c in ('sre', 'sre_segmento', 'igg', 'iri_medio', 'd0', 'd20'))
-    bruto['sre'] = bruto['sre'].astype(str)
+    bruto = pd.read_excel(ns['INPUT_FILE'], usecols=lambda c: c in ('sre', 'sre_segmento', 'sentido', 'igg', 'iri_medio', 'd0', 'd20'))
+    bruto['sre'] = ns['chave_pista'](bruto)   # mesma chave da leitura do notebook (pistas da duplicada separadas)
     for c in ('d0', 'd20'):
         bruto[c] = pd.to_numeric(bruto[c], errors='coerce')
     obs = bruto.groupby(['sre', 'sre_segmento']).agg(igg_obs=('igg', lambda s: s.notna().any()),
@@ -335,28 +391,12 @@ def montar_tabelas(ns):
         p0, pn = geom.coords[0], geom.coords[-1]
         if (pn[0] - r.lon_inicia) ** 2 + (pn[1] - r.lat_inicia) ** 2 < (p0[0] - r.lon_inicia) ** 2 + (p0[1] - r.lat_inicia) ** 2:
             geom = type(geom)(list(geom.coords)[::-1])
-        s = r.sre
-        m = med.loc[s] if s in med.index else pd.Series(dtype=float)
-        c = ref.loc[s] if s in ref.index else None
-        row = {
-            'sre': s, 'rodovia': r.go, 'classe_via': r.classe, 'inicio': r.inicio, 'fim': r.fim,
-            'km_inicial': round(float(r.km_inicial), 3), 'km_final': round(float(r.km_final), 3),
-            'extensao_km': round(float(r.extensao), 3), 'situacao': r.situacao, 'jurisdicao': r.jurisdicao,
-            'regional': int(r.regional) if pd.notna(r.regional) else None, 'trecho': r.trecho,
-            'perimetro_urbano': r.perim_urb == 's', 'federal': r.federal if isinstance(r.federal, str) else None,
-            'tem_dados': s in grupos,
-            'n_intervalos': int(len(grupos[s]['ini'])) if s in grupos else 0,
-            'iri_medio': m.get('iri_medio'), 'igg_medio': m.get('igg_medio'), 'd0_medio': m.get('d0_medio'),
-            'n_seg_funcional': int(c['quebras_func']) + 1 if c is not None else None,
-            'n_seg_estrutural': int(c['quebras_estrut']) + 1 if c is not None else None,
-            'n_seg_combinada': int(c['quebras_comb']) + 1 if c is not None else None,
-            'beta_estrut': c['beta_estrut'] if c is not None else None,
-            'geom_mapa': coords(geom, TOL_GEOM_MAPA),
-        }
-        for p in ('iri', 'igg', 'd0'):
-            row[f'classe_{p}'] = classe_de(row[f'{p}_medio'], p)
-        sre_rows.append(row)
-        geom_det[s] = coords(geom, TOL_GEOM_DETALHE)
+        # duplicada: uma linha por pista (SRE + C/D), desenhada deslocada para o seu lado da via
+        pistas = [(r.sre + suf, sent) for suf, sent in (('C', 'crescente'), ('D', 'decrescente')) if r.sre + suf in grupos]
+        for s, sentido in pistas or [(r.sre, None)]:
+            geom_p = deslocar_pista(geom, sentido)
+            sre_rows.append(linha_sre(r, s, sentido, geom_p, med, ref, grupos))
+            geom_det[s] = coords(geom_p, TOL_GEOM_DETALHE)
     sre = pd.DataFrame(sre_rows).replace({np.nan: None})
     sre['geom_detalhe'] = sre['sre'].map(geom_det)
 
@@ -403,7 +443,9 @@ def montar_tabelas(ns):
         'beta_rede': round(ns['BETA_REDE'], 4), 'beta_min': round(ns['BETA_MIN_EF'], 4),
         'beta_bic': round(ns['BETA_BIC'], 4), 'alpha_km_func': round(ns['ALPHA_KM_FUNC_OPT'], 6),
         'min_size': ns['MIN_SIZE'], 'cv_limite': ns['CV_LIMITE'], 'sens_tol_km': ns['SENS_TOL_KM'],
-        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)), 'situacoes': list(SITUACOES), 'min_comp_km': MIN_COMP_KM, 'max_comp_km': MAX_COMP_KM, 'jurisdicao': JURISDICAO, 'principal': PRINCIPAL,
+        'n_sres': len(sres), 'n_intervalos': int(len(intervalo)),
+        'n_pistas_duplicadas': int(sre['sentido'].notna().sum()),
+        'pistas': 'duplicadas segmentadas por pista: sre = SRE + C (crescente) ou D (decrescente)', 'situacoes': list(SITUACOES), 'min_comp_km': MIN_COMP_KM, 'max_comp_km': MAX_COMP_KM, 'jurisdicao': JURISDICAO, 'principal': PRINCIPAL,
     }
     meta_df = pd.DataFrame([{'chave': k, 'valor': json.dumps(v)} for k, v in meta.items()])
 
@@ -445,10 +487,16 @@ ORDEM = {'sre': ['sre'], 'intervalo': ['sre', 'ordem'], 'segmento': ['sre', 'fat
          'classe_limite': ['parametro', 'ordem'], 'parametro': ['parametro']}
 
 
+def esvaziar(pasta):
+    """Apaga os arquivos da pasta (recursivo) e mantem as pastas: o OneDrive bloqueia remover pastas sincronizadas."""
+    os.makedirs(pasta, exist_ok=True)
+    for raiz, _, arquivos in os.walk(pasta):
+        for nome in arquivos:
+            os.remove(os.path.join(raiz, nome))
+
+
 def gravar_banco(tabs, meta):
-    if os.path.isdir(SAIDA_DB):
-        shutil.rmtree(SAIDA_DB)
-    os.makedirs(SAIDA_DB)
+    esvaziar(SAIDA_DB)
     for nome, t in tabs.items():
         t2 = t.copy()
         for c in COLS_JSON.get(nome, ()):   # listas/dicts vao como texto JSON (jsonb no banco)
@@ -474,9 +522,8 @@ def ler_banco():
 def gravar_site(tabs, meta):
     """site/dados-local/: mesmo conteudo e ordem de dados_rede() e dados_sre()."""
     tabs = {k: (t.sort_values(ORDEM[k], kind='stable').reset_index(drop=True) if k in ORDEM else t) for k, t in tabs.items()}
-    if os.path.isdir(SAIDA_SITE):
-        shutil.rmtree(SAIDA_SITE)
-    os.makedirs(os.path.join(SAIDA_SITE, 'sre'))
+    esvaziar(SAIDA_SITE)
+    os.makedirs(os.path.join(SAIDA_SITE, 'sre'), exist_ok=True)
     rede = {
         'meta': limpar(meta),
         'sres': registros(tabs['sre'], sem=('geom_detalhe',)),

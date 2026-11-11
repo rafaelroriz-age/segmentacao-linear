@@ -7,7 +7,7 @@ import * as M from './modelo.js';
 import * as GS from './graficos_seg.js';
 import { referencia, segmentacaoMalha } from './calibracao.js';
 import { Sensibilidade } from './sensibilidade.js';
-import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO } from './util.js';
+import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO, NOMES_PISTA } from './util.js';
 import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -135,7 +135,7 @@ function montarPainel() {
   const ext = sres.reduce((a, s) => a + (s.extensao_km || 0), 0);
   $('mapa-sub').textContent = `${num(sres.length, 0)} SREs · ${num(ext, 0)} km`;
   montarResumo(sres, ext, meta);
-  $('lista-sres').innerHTML = sres.map((s) => `<option value="${esc(s.sre)}">${esc(s.rodovia || '')} · km ${km(s.km_inicial)}–${km(s.km_final)}</option>`).join('');
+  $('lista-sres').innerHTML = sres.map((s) => `<option value="${esc(s.sre)}">${esc(s.rodovia || '')}${s.sentido ? ` · ${NOMES_PISTA[s.sentido]}` : ''} · km ${km(s.km_inicial)}–${km(s.km_final)}</option>`).join('');
   $('busca-sre').addEventListener('change', (e) => {
     const v = e.target.value.trim().toUpperCase();
     if (sres.some((s) => s.sre === v)) selecionarSre(v);
@@ -254,7 +254,7 @@ const cenario = (pac, f) => pac.cenarios.find((c) => c.fator === f);
 function cabecalho(pac) {
   const s = pac.sre;
   $('det-rodovia').textContent = `${s.rodovia || ''} · Regional ${s.regional ?? '—'} · ${s.situacao || ''} · ${s.jurisdicao || ''}`;
-  $('det-titulo').textContent = `SRE ${s.sre}`;
+  $('det-titulo').textContent = s.sentido ? `SRE ${s.sre_base} · ${NOMES_PISTA[s.sentido]} (${s.sre})` : `SRE ${s.sre}`;
   $('det-trecho').innerHTML = `${esc(s.inicio || '')} → ${esc(s.fim || '')} · <span class="num">km ${km(s.km_inicial)}</span> a <span class="num">km ${km(s.km_final)}</span>`;
   const c = cenario(pac, 1);
   $('det-kpis').innerHTML = [
@@ -430,7 +430,7 @@ function montarRede() {
     const reg = $('sens-regional').value, ord = $('sens-ordem').value;
     const lst = sres.filter((s) => !reg || String(s.regional) === reg).sort((x, y) => (
       ord === 'ext' ? y.extensao_km - x.extensao_km : ord === 'seg' ? (y.n_seg_combinada || 0) - (x.n_seg_combinada || 0) : x.sre.localeCompare(y.sre)));
-    $('sens-sugestoes').innerHTML = lst.slice(0, 12).map((s) => `<button type="button" class="sugestao" data-sre="${esc(s.sre)}"><strong class="num">${esc(s.sre)}</strong><span>${esc(s.rodovia || '')} · ${num(s.extensao_km, 1)} km · ${s.n_seg_combinada ?? '—'} seg.</span></button>`).join('');
+    $('sens-sugestoes').innerHTML = lst.slice(0, 12).map((s) => `<button type="button" class="sugestao" data-sre="${esc(s.sre)}"><strong class="num">${esc(s.sre)}</strong><span>${esc(s.rodovia || '')}${s.sentido ? ` · ${NOMES_PISTA[s.sentido]}` : ''} · ${num(s.extensao_km, 1)} km · ${s.n_seg_combinada ?? '—'} seg.</span></button>`).join('');
     $('sens-sugestoes').querySelectorAll('.sugestao').forEach((b) => b.addEventListener('click', () => analisarSre(b.dataset.sre)));
   };
   $('sens-regional').addEventListener('change', sugerir);

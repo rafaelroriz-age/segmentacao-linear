@@ -722,7 +722,15 @@ export function f1Quebras(refKm, km, tol) {
 }
 
 // ── preparo de um dataset bruto (mesma leitura do notebook, Célula 3) ────────
-/** linhas: [{sre, sre_segmento?, km_inicial, km_final, igg, iri_medio, d0}] → { sre: a } */
+const SUFIXO_PISTA = { CRESCENTE: 'C', DECRESCENTE: 'D' };
+/** Código da série segmentada (mesma regra de chave_pista no notebook): pista simples (sentido
+ *  'CRESCENTE/DECRESCENTE' ou vazio) = o próprio SRE; duplicada = SRE + 'C' (crescente) ou 'D' (decrescente). */
+export function chaveSre(sre, sentido) {
+  const s = String(sre ?? '').trim();
+  return s ? s + (SUFIXO_PISTA[String(sentido ?? '').trim().toUpperCase()] || '') : '';
+}
+
+/** linhas: [{sre, sentido?, sre_segmento?, km_inicial, km_final, igg, iri_medio, d0}] → { sre: a } */
 export function prepararDataset(linhas) {
   const num = (v) => {
     if (v === null || v === undefined || v === '') return NaN;
@@ -732,7 +740,7 @@ export function prepararDataset(linhas) {
   const temSeg = linhas.some((l) => l.sre_segmento !== undefined && l.sre_segmento !== null && l.sre_segmento !== '');
   const grupos = new Map();
   for (const l of linhas) {
-    const sre = String(l.sre ?? '').trim();
+    const sre = chaveSre(l.sre, l.sentido);
     if (!sre) continue;
     const ki = num(l.km_inicial), kf = num(l.km_final);
     const chave = temSeg ? `${sre}\u0000${l.sre_segmento}` : `${sre}\u0000${ki}\u0000${kf}`;
