@@ -8,7 +8,7 @@ export const TIPOS = ['funcional', 'estrutural', 'combinada'];
 export const SITUACOES = ['PAV', 'DUP', 'EOD'];
 export const NOMES_SITUACAO = { PAV: 'Pavimentada', DUP: 'Duplicada', EOD: 'Em obras de duplicação' };
 export const CORES_SITUACAO = { PAV: '#C92A2A', DUP: '#E07A86', EOD: '#5C0F0F' };
-export const NOMES_TIPO = { funcional: 'Funcional (IGG, l2)', estrutural: 'Estrutural (d0, PELT normal)', combinada: 'Combinada (2 etapas)' };
+export const NOMES_TIPO = { funcional: 'Funcional (l2)', estrutural: 'Estrutural (d0, PELT normal)', combinada: 'Combinada (2 etapas)' };
 
 const nf = (casas) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 const cacheNf = {};

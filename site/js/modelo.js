@@ -44,8 +44,13 @@ export const MODELOS = {
   linear: 'linear — muda a inclinação (tendência)',
 };
 export const MODELO_PADRAO = { d0: 'normal', raio: 'normal', aca: 'linear' };
-export const CFG_PADRAO = { func: 'igg', estrut: 'd0', modelo: 'normal' };
-export const ehPadrao = (cfg) => !cfg || (cfg.func === 'igg' && cfg.estrut === 'd0' && cfg.modelo === 'normal');
+// padrão da interface: funcional por IRI. O banco guarda a segmentação pré-calculada pelo notebook v8 com IGG
+// (CFG_BANCO); qualquer outra combinação, inclusive o padrão IRI, é calibrada e segmentada no navegador.
+export const CFG_PADRAO = { func: 'iri', estrut: 'd0', modelo: 'normal' };
+export const CFG_BANCO = { func: 'igg', estrut: 'd0', modelo: 'normal' };
+/** true quando a combinação é a pré-calculada no banco (dados do notebook podem ser usados diretamente) */
+export const ehPadrao = (cfg) => !cfg || (cfg.func === CFG_BANCO.func && cfg.estrut === CFG_BANCO.estrut && cfg.modelo === CFG_BANCO.modelo);
+export const ehPadraoUi = (cfg) => !cfg || (cfg.func === CFG_PADRAO.func && cfg.estrut === CFG_PADRAO.estrut && cfg.modelo === CFG_PADRAO.modelo);
 
 // ── PELT ─────────────────────────────────────────────────────────────────────
 export function prefixos(y, linear = false) {

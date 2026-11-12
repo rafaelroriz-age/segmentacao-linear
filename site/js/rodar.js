@@ -5,6 +5,7 @@ import * as GP from './graficos_passos.js';
 import { Sensibilidade } from './sensibilidade.js';
 import * as GS from './graficos_seg.js';
 import { baixarPng } from './exportar.js';
+import { baixarShapefile, trechoLonLat } from './shapefile.js';
 import { carregarIntervalos } from './dados.js';
 import { num, km, esc, baixarCsv, criarReferencia, camadaBase, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
@@ -110,6 +111,7 @@ export class Rodar {
     this.$('rd-tipo-mapa').addEventListener('change', () => this.desenharMapa());
     this.$('rd-csv').addEventListener('click', () => this.baixarResultado('csv'));
     this.$('rd-xlsx').addEventListener('click', () => this.baixarResultado('xlsx'));
+    this.$('rd-shp').addEventListener('click', () => { try { this.baixarShapefile(); } catch (err) { alert(err.message); } });
     this.$('rd-png-sre').addEventListener('click', async () => {
       for (const [k, id, h] of [['1_funcional', 'rd-graf-func', 620], ['2_estrutural', 'rd-graf-estrut', 620], ['3_unido', 'rd-graf-unido', 700], ['4_resultado', 'rd-graf-regua', 380]]) {
         await baixarPng(this.$(id), `${this.sreAtual || 'sre'}_${k}`, { largura: 1600, altura: h });
@@ -531,6 +533,20 @@ export class Rodar {
   }
 
   // ── downloads ──
+  baixarShapefile() {
+    const res = this.res;
+    if (!res) return;
+    const geo = this.geometrias();
+    const camadas = {};
+    for (const t of TIPOS) {
+      camadas[`segmentacao_${t}`] = Object.entries(res.porSre).flatMap(([sre, q]) => q.segmentos.filter((g) => g.tipo === t).map(({ tipo, ...g }) => ({
+        coords: geo[sre] ? trechoLonLat(geo[sre].coords, q.r.km_min, q.r.km_max, g.km_inicial, g.km_final) : null,
+        props: { sre, ...Object.fromEntries(Object.entries(g).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v))), param_func: this.cfg.sinais.func.toUpperCase() },
+      })));
+    }
+    baixarShapefile('segmentacao_resultado', camadas);
+  }
+
   async baixarResultado(formato) {
     const res = this.res;
     const segs = Object.entries(res.porSre).flatMap(([s, q]) => q.segmentos.map((g) => ({ sre: s, ...g })));

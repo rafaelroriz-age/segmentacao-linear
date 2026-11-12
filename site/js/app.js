@@ -9,15 +9,19 @@ import { referencia, segmentacaoMalha } from './calibracao.js';
 import { Sensibilidade } from './sensibilidade.js';
 import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO, NOMES_PISTA } from './util.js';
 import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
+import { baixarShapefile, trechoLonLat } from './shapefile.js';
 
 const $ = (id) => document.getElementById(id);
 const estado = { cfg: { ...M.CFG_PADRAO }, ref: null,  rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
 const CHAVE_KM = { funcional: 'func_km', estrutural: 'estrut_km', combinada: 'comb_km' };
 const padrao = () => M.ehPadrao(estado.cfg);
-const sufixoCfg = () => (padrao() ? '' : `_${estado.cfg.func}_${estado.cfg.estrut}_${estado.cfg.modelo}`);
+const sufixoCfg = () => (M.ehPadraoUi(estado.cfg) ? '' : `_${estado.cfg.func}_${estado.cfg.estrut}_${estado.cfg.modelo}`);
+// penalidades de referência da combinação escolhida; a segmentação da malha fora do banco espera por elas
+let refPronta = Promise.resolve();
 
 // segmentação da malha: do banco (modelo padrão IGG + D0) ou calculada no navegador para os parâmetros escolhidos
 async function resultadoMalha() {
+  await refPronta;
   const ref = estado.ref || { beta: estado.rede.meta.beta_rede, betaMin: estado.rede.meta.beta_min, alpha: estado.rede.meta.alpha_km_func };
   try {
     return await segmentacaoMalha(estado.cfg, ref, estado.rede, (t) => carregando(t));
@@ -526,23 +530,23 @@ function ligarParametros() {
   const resumoRef = () => {
     const r = estado.ref, cfg = estado.cfg;
     status(M.ehPadrao(cfg)
-      ? `Modelo padrão do notebook: penalidade estrutural ${num(r.beta, 2)}, α_km ${num(r.alpha, 4)}.`
+      ? `Combinação pré-calculada no banco (notebook v8, IGG): penalidade estrutural ${num(r.beta, 2)}, α_km ${num(r.alpha, 4)}.`
       : `Penalidade de referência recalculada para esta combinação (cotovelo da malha): estrutural ${num(r.beta, 2)}, α_km ${num(r.alpha, 4)}.`);
   };
-  todos().forEach((sel) => sel.addEventListener('change', async () => {
-    const chave = sel === funcMapa ? 'func' : sel.dataset.p;
-    const novo = { ...estado.cfg, [chave]: sel.value };
-    if (chave === 'estrut') novo.modelo = M.MODELO_PADRAO[sel.value];   // modelo sugerido para o sinal
+  const aplicar = async (novo) => {
     estado.cfg = novo;
     sincronizar();
     todos().forEach((s) => { s.disabled = true; });
+    let fim;
+    refPronta = new Promise((ok) => { fim = ok; });
     try {
       estado.ref = await referencia(novo, estado.rede, (t) => status(`<span class="spinner"></span> ${esc(t)}`));
       resumoRef();
     } catch (err) {
-      status(`Não foi possível calibrar: ${esc(err.message)}. Usando as penalidades do modelo padrão.`);
+      status(`Não foi possível calibrar: ${esc(err.message)}. Usando as penalidades pré-calculadas no banco (IGG).`);
       estado.ref = null;
     } finally {
+      fim();
       todos().forEach((s) => { s.disabled = false; });
     }
     estado.sensSre = null;
@@ -551,10 +555,17 @@ function ligarParametros() {
     estado.mapa.redesenharTudo();
     if (estado.pac) { redesenharDetalheMapa(); desenharAba(abaAtiva()); }
     if (estado.sensRedeSre && document.querySelector('#pagina-rede').classList.contains('ativa')) analisarSre(estado.sensRedeSre);
+  };
+  todos().forEach((sel) => sel.addEventListener('change', () => {
+    const chave = sel === funcMapa ? 'func' : sel.dataset.p;
+    const novo = { ...estado.cfg, [chave]: sel.value };
+    if (chave === 'estrut') novo.modelo = M.MODELO_PADRAO[sel.value];   // modelo sugerido para o sinal
+    aplicar(novo);
   }));
   sincronizar();
   estado.ref = { beta: estado.rede.meta.beta_rede, betaMin: estado.rede.meta.beta_min, alpha: estado.rede.meta.alpha_km_func };
-  resumoRef();
+  if (padrao()) resumoRef();
+  else aplicar(estado.cfg);   // padrão IRI: calibra uma vez (fica guardado neste navegador) e redesenha mapa e SRE
 }
 
 iniciar().then(() => { if (estado.rede) ligarParametros(); }).catch((err) => erro(err.message));
@@ -599,6 +610,32 @@ aviso($('dl-malha-xlsx'), async () => {
   abas.SRES = linhasSres(padrao() ? null : await resultadoMalha());
   abas.PARAMETROS = linhasParametros();
   await baixarExcel(`segmentacao_malha${sufixoCfg()}`, abas);
+});
+
+// ── Shapefile (polilinhas WGS 84 cortadas na geometria do SRE pelo km de cada segmento) ──
+const propsSeg = (l) => Object.fromEntries(Object.entries(l).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v)));
+aviso($('dl-malha-shp'), async () => {
+  const tipo = $('tipo-mapa').value;
+  const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
+  const feicoes = linhasSegmentosRede(await segmentosMalha(tipo, true), porSre, tipo).map((l) => {
+    const s = porSre.get(l.sre);
+    return { coords: s ? trechoLonLat(s.geom_mapa, s.km_inicial, s.km_final, l.km_inicial, l.km_final) : null, props: { ...propsSeg(l), param_func: M.SINAIS_FUNC[estado.cfg.func] } };
+  });
+  baixarShapefile(`segmentos_${tipo}_malha${sufixoCfg()}`, { [`segmentos_${tipo}`]: feicoes });
+});
+aviso($('dl-sre-shp'), async () => {
+  if (!estado.pac) return;
+  const s = estado.rede.sres.find((x) => x.sre === estado.sre) || estado.pac.sre;
+  const geom = estado.pac.sre.geom_detalhe || s.geom_mapa;
+  const segs = segmentosSre(estado.pac);
+  const camadas = {};
+  for (const t of TIPOS) {
+    camadas[`${estado.sre}_${t}`] = segs.filter((g) => g.tipo === t).sort((a, b) => a.seg_id - b.seg_id).map(({ fator, ...g }) => ({
+      coords: trechoLonLat(geom, s.km_inicial, s.km_final, g.km_inicial, g.km_final),
+      props: { sre: estado.sre, rodovia: s.rodovia ?? null, ...propsSeg(g), param_func: M.SINAIS_FUNC[estado.cfg.func] },
+    }));
+  }
+  baixarShapefile(`${estado.sre}_segmentacao${sufixoCfg()}`, camadas);
 });
 
 aviso($('dl-sre-xlsx'), async () => {

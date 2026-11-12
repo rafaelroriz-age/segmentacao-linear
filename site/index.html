@@ -115,14 +115,14 @@
             </select></label>
           <label class="controle"><span class="rot-controle">Parâmetro funcional</span>
             <select id="func-mapa" title="Vale para o mapa, as planilhas da malha e o SRE aberto">
-              <option value="igg">IGG (modelo padrão)</option>
-              <option value="iri">IRI</option>
+              <option value="iri">IRI (padrão)</option>
+              <option value="igg">IGG (pré-calculado no banco)</option>
             </select></label>
           <label class="controle"><span class="rot-controle">Segmentação</span>
             <select id="tipo-mapa">
               <option value="combinada">Funcional + estrutural</option>
               <option value="estrutural">Estrutural (d0)</option>
-              <option value="funcional">Funcional (IGG)</option>
+              <option value="funcional">Funcional (IRI)</option>
             </select></label>
           <label class="controle"><span class="rot-controle">Colorir por</span>
             <select id="modo-mapa">
@@ -144,6 +144,7 @@
           <span class="rot-controle">Baixar</span>
           <button class="btn btn-sec" type="button" id="dl-malha-xlsx">Segmentos da malha (Excel)</button>
           <button class="btn btn-sec" type="button" id="dl-malha-csv">Segmentos do tipo escolhido (Excel)</button>
+          <button class="btn btn-sec" type="button" id="dl-malha-shp">Segmentos do tipo escolhido (Shapefile)</button>
           <button class="btn btn-sec" type="button" id="dl-sres-csv">Resumo dos SREs (Excel)</button>
           <button class="btn btn-sec" type="button" id="dl-cond-png">Gráfico de condição (PNG)</button>
         </div>
@@ -166,10 +167,11 @@
           <button class="btn" type="button" id="dl-sre-xlsx">Planilha do SRE (Excel)</button>
           <button class="btn btn-sec" type="button" id="dl-sre-png">Perfil longitudinal (PNG)</button>
           <button class="btn btn-sec" type="button" id="dl-sre-csv">Segmentos do tipo escolhido (Excel)</button>
+          <button class="btn btn-sec" type="button" id="dl-sre-shp">Segmentos do SRE (Shapefile)</button>
         </div>
         <div class="kpis" id="det-kpis"></div>
         <div class="barra-parametros" data-parametros>
-          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="igg">IGG</option><option value="iri">IRI</option></select></label>
+          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="iri">IRI (padrão)</option><option value="igg">IGG</option></select></label>
           <label class="controle"><span class="rot-controle">2 · Parâmetro estrutural</span><select data-p="estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select></label>
           <label class="controle"><span class="rot-controle">Modelo do PELT (estrutural)</span><select data-p="modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select></label>
           <p class="sub estado-param" data-p-estado></p>
@@ -242,7 +244,7 @@
 
     <section class="cartao" aria-label="Escolha do SRE">
       <div class="barra-parametros" data-parametros>
-          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="igg">IGG</option><option value="iri">IRI</option></select></label>
+          <label class="controle"><span class="rot-controle">1 · Parâmetro funcional</span><select data-p="func"><option value="iri">IRI (padrão)</option><option value="igg">IGG</option></select></label>
           <label class="controle"><span class="rot-controle">2 · Parâmetro estrutural</span><select data-p="estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select></label>
           <label class="controle"><span class="rot-controle">Modelo do PELT (estrutural)</span><select data-p="modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select></label>
           <p class="sub estado-param" data-p-estado></p>
@@ -337,7 +339,7 @@
         <li>
           <h3>Parâmetros</h3>
           <div class="grade-params">
-            <label class="param"><span>1 · Parâmetro funcional</span><select id="rd-func"><option value="igg">IGG</option><option value="iri">IRI</option></select><small>Sinal da segmentação funcional (PELT l2).</small></label>
+            <label class="param"><span>1 · Parâmetro funcional</span><select id="rd-func"><option value="iri" selected>IRI (padrão)</option><option value="igg">IGG</option></select><small>Sinal da segmentação funcional (PELT l2).</small></label>
             <label class="param"><span>2 · Parâmetro estrutural</span><select id="rd-estrut"><option value="d0">D0 (deflexão)</option><option value="raio">Raio de curvatura</option><option value="aca">Diferença acumulada (ACA)</option></select><small>Raio = 6250 / (2·(D0 − D20)) quando não houver coluna “raio”.</small></label>
             <label class="param"><span>Modelo do PELT (estrutural)</span><select id="rd-modelo"><option value="normal">normal — média ou variabilidade</option><option value="l2">l2 — só a média</option><option value="linear">linear — inclinação (tendência)</option></select><small>Sugestão: normal para D0 e raio; linear para a ACA.</small></label>
             <label class="param"><span>Penalidade estrutural <span class="num">β</span> <button class="ajuda" type="button" title="Penalidade do PELT normal sobre d0: cada quebra custa este valor. O notebook usa o cotovelo da curva “quebras na malha × penalidade” (o ponto a partir do qual aumentar a penalidade quase não remove quebras).">?</button></span>
@@ -374,7 +376,7 @@
       <article class="cartao">
         <div class="cab-cartao">
           <h2>Resultado</h2>
-          <div class="linha-botoes"><button class="btn btn-sec" type="button" id="rd-csv">Baixar CSV</button><button class="btn btn-sec" type="button" id="rd-xlsx">Baixar Excel</button></div>
+          <div class="linha-botoes"><button class="btn btn-sec" type="button" id="rd-csv">Baixar CSV</button><button class="btn btn-sec" type="button" id="rd-xlsx">Baixar Excel</button><button class="btn btn-sec" type="button" id="rd-shp">Baixar Shapefile</button></div>
         </div>
         <div class="kpis" id="rd-kpis"></div>
         <p class="nota" id="rd-nota-res"></p>
@@ -561,7 +563,7 @@
       <h2>Método</h2>
       <h3>As três segmentações</h3>
       <ul>
-        <li><strong>Funcional</strong> — PELT <code>l2</code> sobre o IGG padronizado (mudança de nível). Penalidade = α_km × extensão, com faixa de ±50% escolhida pelo BIC; vizinhos sem diferença de média (Welch) são fundidos.</li>
+        <li><strong>Funcional</strong> — PELT <code>l2</code> sobre o IRI padronizado (mudança de nível; o IGG pode ser escolhido nos parâmetros). Penalidade = α_km × extensão, com faixa de ±50% escolhida pelo BIC; vizinhos sem diferença de média (Welch) são fundidos.</li>
         <li><strong>Estrutural</strong> — PELT <code>normal</code> (média e variância por segmento) sobre o d0, como em Biswas &amp; Kuna (2022). A penalidade da rede é o cotovelo da curva “quebras na malha × penalidade”.</li>
         <li><strong>Funcional + estrutural</strong> — o resultado final junta as fronteiras das duas segmentações; fronteiras a até 0,4 km uma da outra contam como uma só (na posição estrutural).</li>
       </ul>
