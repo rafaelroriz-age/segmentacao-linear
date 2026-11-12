@@ -5,7 +5,7 @@ import * as GP from './graficos_passos.js';
 import { Sensibilidade } from './sensibilidade.js';
 import * as GS from './graficos_seg.js';
 import { baixarPng } from './exportar.js';
-import { baixarShapefile, trechoLonLat } from './shapefile.js';
+import { baixarShapefile, trechoLonLat, sentidoShp } from './shapefile.js';
 import { carregarIntervalos } from './dados.js';
 import { num, km, esc, baixarCsv, criarReferencia, camadaBase, TIPOS, SITUACOES as LISTA_SITUACOES } from './util.js';
 
@@ -542,7 +542,7 @@ export class Rodar {
     for (const t of TIPOS) {
       camadas[`segmentacao_${t}`] = Object.entries(res.porSre).flatMap(([sre, q]) => q.segmentos.filter((g) => g.tipo === t).map(({ tipo, ...g }) => ({
         coords: geo[sre] ? trechoLonLat(geo[sre].coords, q.r.km_min, q.r.km_max, g.km_inicial, g.km_final) : null,
-        props: { sre, sre_base: malha.get(sre)?.sre_base ?? sre, sentido: malha.get(sre)?.sentido ?? null, ...Object.fromEntries(Object.entries(g).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v))), param_func: this.cfg.sinais.func.toUpperCase() },
+        props: { sre, sre_base: malha.get(sre)?.sre_base ?? sre, sentido: sentidoShp(malha.get(sre)?.sentido), ...Object.fromEntries(Object.entries(g).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v))), param_func: this.cfg.sinais.func.toUpperCase() },
       })));
     }
     baixarShapefile('segmentacao_resultado', camadas);

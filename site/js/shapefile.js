@@ -11,6 +11,9 @@ export function trechoLonLat(coords, kmIni, kmFim, k0, k1) {
   return criarReferencia(coords, kmIni, kmFim).trecho(k0, k1).map(([lat, lon]) => [lon, lat]);
 }
 
+/** sentido como no dataset: pista de duplicada → CRESCENTE/DECRESCENTE; pista simples (sem sentido no banco) → CRESCENTE/DECRESCENTE */
+export const sentidoShp = (s) => (s ? String(s).toUpperCase() : 'CRESCENTE/DECRESCENTE');
+
 // ── .shp e .shx ──
 function caixaDe(c) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

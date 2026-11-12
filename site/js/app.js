@@ -9,7 +9,7 @@ import { referencia, segmentacaoMalha } from './calibracao.js';
 import { Sensibilidade } from './sensibilidade.js';
 import { num, km, fatorTxt, esc, TIPOS, URL_MAPA_BASE, urlTesteMapaBase, residuosPadronizados, baixarCsv, SITUACOES, NOMES_SITUACAO, CORES_SITUACAO, NOMES_PISTA } from './util.js';
 import { baixarExcel, baixarPng, abasDoSre, linhasSegmentosRede } from './exportar.js';
-import { baixarShapefile, trechoLonLat } from './shapefile.js';
+import { baixarShapefile, trechoLonLat, sentidoShp } from './shapefile.js';
 
 const $ = (id) => document.getElementById(id);
 const estado = { cfg: { ...M.CFG_PADRAO }, ref: null,  rede: null, mapa: null, pac: null, sre: null, tipoTabela: 'combinada', fatorTabela: 1, paramRegional: 'iri', redeDesenhada: false, rodar: null, sens: null, sensSre: null };
@@ -619,7 +619,7 @@ aviso($('dl-malha-shp'), async () => {
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
   const feicoes = linhasSegmentosRede(await segmentosMalha(tipo, true), porSre, tipo).map((l) => {
     const s = porSre.get(l.sre);
-    return { coords: s ? trechoLonLat(s.geom_mapa, s.km_inicial, s.km_final, l.km_inicial, l.km_final) : null, props: { sre: l.sre, sre_base: s?.sre_base ?? l.sre, sentido: s?.sentido ?? null, ...propsSeg(l), param_func: M.SINAIS_FUNC[estado.cfg.func] } };
+    return { coords: s ? trechoLonLat(s.geom_mapa, s.km_inicial, s.km_final, l.km_inicial, l.km_final) : null, props: { sre: l.sre, sre_base: s?.sre_base ?? l.sre, sentido: sentidoShp(s?.sentido), ...propsSeg(l), param_func: M.SINAIS_FUNC[estado.cfg.func] } };
   });
   baixarShapefile(`segmentos_${tipo}_malha${sufixoCfg()}`, { [`segmentos_${tipo}`]: feicoes });
 });
@@ -632,7 +632,7 @@ aviso($('dl-sre-shp'), async () => {
   for (const t of TIPOS) {
     camadas[`${estado.sre}_${t}`] = segs.filter((g) => g.tipo === t).sort((a, b) => a.seg_id - b.seg_id).map(({ fator, ...g }) => ({
       coords: trechoLonLat(geom, s.km_inicial, s.km_final, g.km_inicial, g.km_final),
-      props: { sre: estado.sre, sre_base: s.sre_base ?? estado.sre, sentido: s.sentido ?? null, rodovia: s.rodovia ?? null, ...propsSeg(g), param_func: M.SINAIS_FUNC[estado.cfg.func] },
+      props: { sre: estado.sre, sre_base: s.sre_base ?? estado.sre, sentido: sentidoShp(s.sentido), rodovia: s.rodovia ?? null, ...propsSeg(g), param_func: M.SINAIS_FUNC[estado.cfg.func] },
     }));
   }
   baixarShapefile(`${estado.sre}_segmentacao${sufixoCfg()}`, camadas);
