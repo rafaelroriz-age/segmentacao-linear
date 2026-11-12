@@ -619,7 +619,7 @@ aviso($('dl-malha-shp'), async () => {
   const porSre = new Map(estado.rede.sres.map((s) => [s.sre, s]));
   const feicoes = linhasSegmentosRede(await segmentosMalha(tipo, true), porSre, tipo).map((l) => {
     const s = porSre.get(l.sre);
-    return { coords: s ? trechoLonLat(s.geom_mapa, s.km_inicial, s.km_final, l.km_inicial, l.km_final) : null, props: { ...propsSeg(l), param_func: M.SINAIS_FUNC[estado.cfg.func] } };
+    return { coords: s ? trechoLonLat(s.geom_mapa, s.km_inicial, s.km_final, l.km_inicial, l.km_final) : null, props: { sre: l.sre, sre_base: s?.sre_base ?? l.sre, sentido: s?.sentido ?? null, ...propsSeg(l), param_func: M.SINAIS_FUNC[estado.cfg.func] } };
   });
   baixarShapefile(`segmentos_${tipo}_malha${sufixoCfg()}`, { [`segmentos_${tipo}`]: feicoes });
 });
@@ -632,7 +632,7 @@ aviso($('dl-sre-shp'), async () => {
   for (const t of TIPOS) {
     camadas[`${estado.sre}_${t}`] = segs.filter((g) => g.tipo === t).sort((a, b) => a.seg_id - b.seg_id).map(({ fator, ...g }) => ({
       coords: trechoLonLat(geom, s.km_inicial, s.km_final, g.km_inicial, g.km_final),
-      props: { sre: estado.sre, rodovia: s.rodovia ?? null, ...propsSeg(g), param_func: M.SINAIS_FUNC[estado.cfg.func] },
+      props: { sre: estado.sre, sre_base: s.sre_base ?? estado.sre, sentido: s.sentido ?? null, rodovia: s.rodovia ?? null, ...propsSeg(g), param_func: M.SINAIS_FUNC[estado.cfg.func] },
     }));
   }
   baixarShapefile(`${estado.sre}_segmentacao${sufixoCfg()}`, camadas);

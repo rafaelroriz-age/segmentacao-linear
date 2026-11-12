@@ -537,11 +537,12 @@ export class Rodar {
     const res = this.res;
     if (!res) return;
     const geo = this.geometrias();
+    const malha = new Map(this.ctx.rede.sres.map((s) => [s.sre, s]));
     const camadas = {};
     for (const t of TIPOS) {
       camadas[`segmentacao_${t}`] = Object.entries(res.porSre).flatMap(([sre, q]) => q.segmentos.filter((g) => g.tipo === t).map(({ tipo, ...g }) => ({
         coords: geo[sre] ? trechoLonLat(geo[sre].coords, q.r.km_min, q.r.km_max, g.km_inicial, g.km_final) : null,
-        props: { sre, ...Object.fromEntries(Object.entries(g).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v))), param_func: this.cfg.sinais.func.toUpperCase() },
+        props: { sre, sre_base: malha.get(sre)?.sre_base ?? sre, sentido: malha.get(sre)?.sentido ?? null, ...Object.fromEntries(Object.entries(g).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v))), param_func: this.cfg.sinais.func.toUpperCase() },
       })));
     }
     baixarShapefile('segmentacao_resultado', camadas);
